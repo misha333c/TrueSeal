@@ -134,16 +134,29 @@ function buildScoreAndAdvice(spf, dkim, dmarc) {
   }
 
   if (dmarc.found) {
-    if (dmarc.policy === 'reject' || dmarc.policy === 'quarantine') {
+    if (dmarc.policy === 'reject') {
       score += 40;
-    } else if (dmarc.policy === 'none') {
-      score += 20;
+    } else if (dmarc.policy === 'quarantine') {
+      score += 30;
       recommendations.push(
-        'Your DMARC policy is set to "p=none", which only monitors and does not block spoofed email. ' +
-        'Once you\'ve confirmed legitimate mail passes SPF/DKIM, consider upgrading to "p=quarantine" or "p=reject".'
+        'Your DMARC policy is set to "p=quarantine", which sends suspicious mail to spam rather than ' +
+        'blocking it outright — a solid middle ground. Once you\'ve confirmed legitimate mail reliably passes ' +
+        'SPF/DKIM, consider upgrading to "p=reject" for the strongest protection.'
+      );
+    } else if (dmarc.policy === 'none') {
+      score += 15;
+      recommendations.push(
+        'Your DMARC policy is set to "p=none". This means a record exists and you\'ll receive reports, but ' +
+        'it isn\'t actually enforcing anything yet — spoofed mail is delivered normally. Once you\'ve confirmed ' +
+        'legitimate mail reliably passes SPF/DKIM, move to "p=quarantine" or "p=reject" so the record actually protects you.'
       );
     } else {
-      score += 20;
+      score += 10;
+      recommendations.push(
+        'Your DMARC record doesn\'t specify a policy ("p=none", "p=quarantine", or "p=reject"), so it\'s not ' +
+        'clear how receiving mail servers should treat spoofed email. Add an explicit policy so the record ' +
+        'actually does something.'
+      );
     }
   } else {
     recommendations.push(

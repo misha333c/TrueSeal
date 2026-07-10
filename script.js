@@ -118,7 +118,7 @@ function dmarcCheckItem(dmarc) {
     return createCheckItem('fail', 'DMARC', 'Not found');
   }
   const detail = `Found (policy: ${dmarc.policy || 'none specified'})`;
-  const status = dmarc.policy === 'reject' || dmarc.policy === 'quarantine' ? 'pass' : 'warn';
+  const status = dmarc.policy === 'reject' ? 'pass' : 'warn';
   return createCheckItem(status, 'DMARC', detail);
 }
 
