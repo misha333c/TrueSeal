@@ -69,11 +69,24 @@ async function checkSpf(domain) {
   try {
     const records = await dns.resolveTxt(domain);
     const flat = records.map(parts => parts.join(''));
-    const spf = flat.find(txt => txt.startsWith('v=spf1'));
-    if (!spf) return { found: false, record: null, tags: {} };
-    return { found: true, record: spf, tags: parseRecordTags(spf) };
+    const spfRecords = flat.filter(txt => txt.startsWith('v=spf1'));
+
+    if (spfRecords.length === 0) {
+      return { found: false, status: 'not_found', record: null, records: [], tags: {} };
+    }
+
+    // RFC 7208: a domain must publish exactly one SPF record. Two or more
+    // causes SPF evaluation to return "permerror", which many receivers
+    // treat as an outright SPF failure — so this is not just "the first
+    // one wins", it invalidates SPF for the domain entirely.
+    if (spfRecords.length >= 2) {
+      return { found: false, status: 'multiple_records', record: null, records: spfRecords, tags: {} };
+    }
+
+    const spf = spfRecords[0];
+    return { found: true, status: 'found', record: spf, records: spfRecords, tags: parseRecordTags(spf) };
   } catch (err) {
-    return { found: false, record: null, tags: {} };
+    return { found: false, status: 'not_found', record: null, records: [], tags: {} };
   }
 }
 
@@ -137,6 +150,14 @@ function buildScoreAndAdvice(spf, dkim, dmarc) {
 
   if (spf.found) {
     score += 30;
+  } else if (spf.status === 'multiple_records') {
+    recommendations.push(
+      `Found ${spf.records.length} SPF records for this domain, which is invalid — RFC 7208 permits only ` +
+      'one SPF record per domain. With more than one published, SPF evaluation returns a "permerror" and ' +
+      'SPF fails entirely for receiving mail servers, even if each individual record looks fine on its own. ' +
+      'Fix this by merging all the "include:" mechanisms from every record into a single "v=spf1" TXT record, ' +
+      'then removing the duplicates.'
+    );
   } else {
     recommendations.push(
       'No SPF record found. Add a TXT record (e.g. "v=spf1 include:_spf.yourprovider.com ~all") ' +

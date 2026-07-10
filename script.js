@@ -87,17 +87,22 @@ function createTechDetails(record, tags) {
   const content = document.createElement('div');
   content.className = 'tech-content';
 
-  const recordBlock = document.createElement('div');
-  recordBlock.className = 'tech-record';
-  const recordLabel = document.createElement('div');
-  recordLabel.className = 'tech-label';
-  recordLabel.textContent = 'Raw record';
-  const recordValue = document.createElement('code');
-  recordValue.className = 'tech-record-value';
-  recordValue.textContent = record;
-  recordBlock.appendChild(recordLabel);
-  recordBlock.appendChild(recordValue);
-  content.appendChild(recordBlock);
+  // `record` is normally a single raw record string, but callers (e.g. SPF
+  // when multiple records are found) may pass an array to show each one.
+  const records = Array.isArray(record) ? record : [record];
+  records.forEach((r, i) => {
+    const recordBlock = document.createElement('div');
+    recordBlock.className = 'tech-record';
+    const recordLabel = document.createElement('div');
+    recordLabel.className = 'tech-label';
+    recordLabel.textContent = records.length > 1 ? `Raw record ${i + 1}` : 'Raw record';
+    const recordValue = document.createElement('code');
+    recordValue.className = 'tech-record-value';
+    recordValue.textContent = r;
+    recordBlock.appendChild(recordLabel);
+    recordBlock.appendChild(recordValue);
+    content.appendChild(recordBlock);
+  });
 
   const tagEntries = Object.entries(tags || {});
   if (tagEntries.length > 0) {
@@ -166,9 +171,18 @@ function createCheckItem(status, label, detail, record, tags, note) {
 }
 
 function spfCheckItem(spf) {
-  return spf.found
-    ? createCheckItem('pass', 'SPF', 'Found', spf.record, spf.tags)
-    : createCheckItem('fail', 'SPF', 'Not found');
+  if (spf.found) {
+    return createCheckItem('pass', 'SPF', 'Found', spf.record, spf.tags);
+  }
+  if (spf.status === 'multiple_records') {
+    return createCheckItem(
+      'fail', 'SPF', `Multiple SPF records found (${spf.records.length}) — invalid`,
+      spf.records, spf.tags,
+      'RFC 7208 allows only one SPF record per domain. Publishing more than one causes SPF evaluation to ' +
+      'return a "permerror", which fails SPF entirely for receiving mail servers.'
+    );
+  }
+  return createCheckItem('fail', 'SPF', 'Not found');
 }
 
 function dkimCheckItem(dkim) {
