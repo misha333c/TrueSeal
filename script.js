@@ -73,8 +73,60 @@ function scoreClass(score) {
   return 'score-poor';
 }
 
+// Builds the collapsed-by-default "Show technical details" panel with the
+// raw record exactly as returned, plus every key=value tag parsed out of it
+// (adkim, aspf, pct, rua, etc.) shown as-is, without interpreting them.
+function createTechDetails(record, tags) {
+  const details = document.createElement('details');
+  details.className = 'tech-details';
+
+  const summary = document.createElement('summary');
+  summary.textContent = 'Show technical details';
+  details.appendChild(summary);
+
+  const content = document.createElement('div');
+  content.className = 'tech-content';
+
+  const recordBlock = document.createElement('div');
+  recordBlock.className = 'tech-record';
+  const recordLabel = document.createElement('div');
+  recordLabel.className = 'tech-label';
+  recordLabel.textContent = 'Raw record';
+  const recordValue = document.createElement('code');
+  recordValue.className = 'tech-record-value';
+  recordValue.textContent = record;
+  recordBlock.appendChild(recordLabel);
+  recordBlock.appendChild(recordValue);
+  content.appendChild(recordBlock);
+
+  const tagEntries = Object.entries(tags || {});
+  if (tagEntries.length > 0) {
+    const tagsBlock = document.createElement('div');
+    tagsBlock.className = 'tech-tags';
+    const tagsLabel = document.createElement('div');
+    tagsLabel.className = 'tech-label';
+    tagsLabel.textContent = 'Parameters';
+    tagsBlock.appendChild(tagsLabel);
+
+    const dl = document.createElement('dl');
+    tagEntries.forEach(([key, value]) => {
+      const dt = document.createElement('dt');
+      dt.textContent = key;
+      const dd = document.createElement('dd');
+      dd.textContent = value;
+      dl.appendChild(dt);
+      dl.appendChild(dd);
+    });
+    tagsBlock.appendChild(dl);
+    content.appendChild(tagsBlock);
+  }
+
+  details.appendChild(content);
+  return details;
+}
+
 // status: 'pass' | 'warn' | 'fail'
-function createCheckItem(status, label, detail) {
+function createCheckItem(status, label, detail, record, tags) {
   const li = document.createElement('li');
   li.className = `check ${status}`;
 
@@ -82,33 +134,45 @@ function createCheckItem(status, label, detail) {
   icon.className = 'check-icon';
   icon.textContent = status === 'pass' ? '✓' : status === 'warn' ? '!' : '✕';
 
-  const text = document.createElement('span');
+  const body = document.createElement('div');
+  body.className = 'check-body';
+
+  const summaryLine = document.createElement('div');
+  summaryLine.className = 'check-summary';
   const labelSpan = document.createElement('span');
   labelSpan.className = 'check-label';
   labelSpan.textContent = `${label}: `;
   const detailSpan = document.createElement('span');
   detailSpan.className = 'check-detail';
   detailSpan.textContent = detail;
-  text.appendChild(labelSpan);
-  text.appendChild(detailSpan);
+  summaryLine.appendChild(labelSpan);
+  summaryLine.appendChild(detailSpan);
+  body.appendChild(summaryLine);
+
+  if (record) {
+    body.appendChild(createTechDetails(record, tags));
+  }
 
   li.appendChild(icon);
-  li.appendChild(text);
+  li.appendChild(body);
   return li;
 }
 
 function spfCheckItem(spf) {
   return spf.found
-    ? createCheckItem('pass', 'SPF', 'Found')
+    ? createCheckItem('pass', 'SPF', 'Found', spf.record, spf.tags)
     : createCheckItem('fail', 'SPF', 'Not found');
 }
 
 function dkimCheckItem(dkim) {
   if (dkim.found) {
-    return createCheckItem('pass', 'DKIM', `Found (selector: ${dkim.selector})`);
+    return createCheckItem('pass', 'DKIM', `Found (selector: ${dkim.selector})`, dkim.record, dkim.tags);
   }
   if (dkim.status === 'revoked') {
-    return createCheckItem('warn', 'DKIM', `Found, but inactive — empty public key (selector: "${dkim.selector}")`);
+    return createCheckItem(
+      'warn', 'DKIM', `Found, but inactive — empty public key (selector: "${dkim.selector}")`,
+      dkim.record, dkim.tags
+    );
   }
   return createCheckItem('fail', 'DKIM', 'Not found among common selectors');
 }
@@ -119,7 +183,7 @@ function dmarcCheckItem(dmarc) {
   }
   const detail = `Found (policy: ${dmarc.policy || 'none specified'})`;
   const status = dmarc.policy === 'reject' ? 'pass' : 'warn';
-  return createCheckItem(status, 'DMARC', detail);
+  return createCheckItem(status, 'DMARC', detail, dmarc.record, dmarc.tags);
 }
 
 function renderResult(data) {

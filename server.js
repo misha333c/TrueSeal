@@ -24,6 +24,25 @@ function isValidDomainFormat(domain) {
   return domain.length <= 253 && DOMAIN_REGEX.test(domain);
 }
 
+// Pulls every "key=value" tag out of a raw record (works for both the
+// ";"-delimited tags in DMARC/DKIM records and the space-delimited
+// mechanisms in SPF records) without interpreting what any of them mean —
+// this is purely for showing the raw technical data to the user as-is.
+function parseRecordTags(record) {
+  const tags = {};
+  if (!record) return tags;
+  record.split(/[;\s]+/).forEach(token => {
+    const trimmed = token.trim();
+    if (!trimmed) return;
+    const eq = trimmed.indexOf('=');
+    if (eq === -1) return;
+    const key = trimmed.slice(0, eq).trim();
+    const value = trimmed.slice(eq + 1).trim();
+    if (key) tags[key] = value;
+  });
+  return tags;
+}
+
 // Uses the public suffix list to find the registrable root domain (e.g.
 // "www.google.co.uk" -> "google.co.uk"). If the input already is its own
 // root domain, parsed.domain === domain and subdomain is null.
@@ -50,9 +69,10 @@ async function checkSpf(domain) {
     const records = await dns.resolveTxt(domain);
     const flat = records.map(parts => parts.join(''));
     const spf = flat.find(txt => txt.startsWith('v=spf1'));
-    return { found: !!spf, record: spf || null };
+    if (!spf) return { found: false, record: null, tags: {} };
+    return { found: true, record: spf, tags: parseRecordTags(spf) };
   } catch (err) {
-    return { found: false, record: null };
+    return { found: false, record: null, tags: {} };
   }
 }
 
@@ -61,13 +81,13 @@ async function checkDmarc(domain) {
     const records = await dns.resolveTxt(`_dmarc.${domain}`);
     const flat = records.map(parts => parts.join(''));
     const dmarc = flat.find(txt => txt.startsWith('v=DMARC1'));
-    if (!dmarc) return { found: false, record: null, policy: null };
+    if (!dmarc) return { found: false, record: null, policy: null, tags: {} };
 
     const policyMatch = dmarc.match(/p=(\w+)/);
     const policy = policyMatch ? policyMatch[1] : null;
-    return { found: true, record: dmarc, policy };
+    return { found: true, record: dmarc, policy, tags: parseRecordTags(dmarc) };
   } catch (err) {
-    return { found: false, record: null, policy: null };
+    return { found: false, record: null, policy: null, tags: {} };
   }
 }
 
@@ -91,7 +111,7 @@ async function checkDkim(domain) {
           if (!revoked) revoked = { selector, record: dkim };
           continue;
         }
-        return { found: true, status: 'found', selector, record: dkim };
+        return { found: true, status: 'found', selector, record: dkim, tags: parseRecordTags(dkim) };
       }
     } catch (err) {
       // that selector doesn't exist, try the next one
@@ -99,9 +119,15 @@ async function checkDkim(domain) {
   }
 
   if (revoked) {
-    return { found: false, status: 'revoked', selector: revoked.selector, record: revoked.record };
+    return {
+      found: false,
+      status: 'revoked',
+      selector: revoked.selector,
+      record: revoked.record,
+      tags: parseRecordTags(revoked.record)
+    };
   }
-  return { found: false, status: 'not_found', selector: null, record: null };
+  return { found: false, status: 'not_found', selector: null, record: null, tags: {} };
 }
 
 function buildScoreAndAdvice(spf, dkim, dmarc) {
