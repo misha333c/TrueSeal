@@ -1,0 +1,52 @@
+body {
+  font-family: system-ui, sans-serif;
+  background: #f5f5f5;
+  color: #222;
+  display: flex;
+  justify-content: center;
+  padding-top: 80px;
+}
+
+.container {
+  background: white;
+  padding: 32px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  width: 400px;
+  text-align: center;
+}
+
+.input-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+#domain-input {
+  flex: 1;
+  padding: 8px;
+  font-size: 16px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+#check-button {
+  padding: 8px 16px;
+  font-size: 16px;
+  border: none;
+  border-radius: 4px;
+  background: #2563eb;
+  color: white;
+  cursor: pointer;
+}
+
+#check-button:hover {
+  background: #1d4ed8;
+}
+
+#result {
+  margin-top: 16px;
+  font-weight: normal;
+  white-space: pre-line;
+  text-align: left;
+}

@@ -1,0 +1,12 @@
+{
+  "name": "email-domain-checker",
+  "version": "1.0.0",
+  "description": "Checks a domain's SPF, DKIM, and DMARC records and scores them.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.22.2"
+  }
+}
