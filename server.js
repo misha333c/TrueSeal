@@ -1,5 +1,6 @@
 const express = require('express');
 const dns = require('dns').promises;
+const psl = require('psl');
 
 const app = express();
 const PORT = 3000;
@@ -21,6 +22,27 @@ const DOMAIN_REGEX = /^(?!-)[a-zA-Z0-9-]{1,63}(?<!-)(\.(?!-)[a-zA-Z0-9-]{1,63}(?
 
 function isValidDomainFormat(domain) {
   return domain.length <= 253 && DOMAIN_REGEX.test(domain);
+}
+
+// Uses the public suffix list to find the registrable root domain (e.g.
+// "www.google.co.uk" -> "google.co.uk"). If the input already is its own
+// root domain, parsed.domain === domain and subdomain is null.
+function findRootDomain(domain) {
+  const parsed = psl.parse(domain);
+  return parsed.domain;
+}
+
+// A domain "exists" in DNS if the parent zone delegates it via NS records.
+// ENOTFOUND means the name itself isn't registered/delegated (NXDOMAIN);
+// any other outcome (including ENODATA, which means the name exists but
+// has no NS records) is treated as "exists" so we don't report false negatives.
+async function domainExists(domain) {
+  try {
+    await dns.resolveNs(domain);
+    return true;
+  } catch (err) {
+    return err.code !== 'ENOTFOUND';
+  }
 }
 
 async function checkSpf(domain) {
@@ -150,6 +172,22 @@ app.get('/check', async (req, res) => {
     });
   }
 
+  const rootDomain = findRootDomain(domain);
+
+  if (!rootDomain) {
+    return res.status(400).json({
+      error: 'Invalid domain format. Enter a plain domain like "example.com" — no spaces, "http://", or paths.'
+    });
+  }
+
+  if (rootDomain !== domain) {
+    return res.json({ domain, type: 'subdomain', rootDomain });
+  }
+
+  if (!(await domainExists(domain))) {
+    return res.json({ domain, type: 'nonexistent' });
+  }
+
   const [spf, dkim, dmarc] = await Promise.all([
     checkSpf(domain),
     checkDkim(domain),
@@ -158,7 +196,7 @@ app.get('/check', async (req, res) => {
 
   const { score, recommendations } = buildScoreAndAdvice(spf, dkim, dmarc);
 
-  res.json({ domain, spf, dkim, dmarc, score, recommendations });
+  res.json({ domain, type: 'checked', spf, dkim, dmarc, score, recommendations });
 });
 
 app.listen(PORT, () => {
