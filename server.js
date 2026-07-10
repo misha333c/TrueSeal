@@ -13,7 +13,8 @@ app.use(express.static(__dirname));
 // usual suspects. A "not found" here means "not found among these", not
 // "definitely no DKIM".
 const COMMON_DKIM_SELECTORS = [
-  'google', 'default', 'selector1', 'selector2', 'k1', 'mail', 'dkim', 's1'
+  'google', 'default', 'selector1', 'selector2', 'k1', 'mail', 'dkim', 's1',
+  's2', 'k2', 'k3', 'dkim1', 'dkim2', 'mandrill', 'zoho', 'pm', 'mailgun', 'smtp'
 ];
 
 // Requires at least one dot (a label + TLD), each label 1-63 chars, no
