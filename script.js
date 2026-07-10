@@ -126,7 +126,7 @@ function createTechDetails(record, tags) {
 }
 
 // status: 'pass' | 'warn' | 'fail'
-function createCheckItem(status, label, detail, record, tags) {
+function createCheckItem(status, label, detail, record, tags, note) {
   const li = document.createElement('li');
   li.className = `check ${status}`;
 
@@ -148,6 +148,13 @@ function createCheckItem(status, label, detail, record, tags) {
   summaryLine.appendChild(labelSpan);
   summaryLine.appendChild(detailSpan);
   body.appendChild(summaryLine);
+
+  if (note) {
+    const noteEl = document.createElement('p');
+    noteEl.className = 'check-note';
+    noteEl.textContent = note;
+    body.appendChild(noteEl);
+  }
 
   if (record) {
     body.appendChild(createTechDetails(record, tags));
@@ -174,7 +181,13 @@ function dkimCheckItem(dkim) {
       dkim.record, dkim.tags
     );
   }
-  return createCheckItem('fail', 'DKIM', 'Not found among common selectors');
+  return createCheckItem(
+    'fail', 'DKIM', 'Not found among common selectors',
+    null, null,
+    "DKIM selectors can't be fully discovered via DNS alone, so this only means no record was found among " +
+    "common selector names — not a guaranteed absence of DKIM. The domain's provider may use a custom " +
+    "selector this check doesn't know about."
+  );
 }
 
 function dmarcCheckItem(dmarc) {
