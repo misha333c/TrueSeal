@@ -206,6 +206,24 @@ function buildScoreAndAdvice(spf, dkim, dmarc) {
         'actually does something.'
       );
     }
+
+    if (!dmarc.tags.rua) {
+      if (dmarc.policy === 'none') {
+        recommendations.push(
+          'Your DMARC record has no "rua" reporting address and is set to "p=none". This means spoofed mail ' +
+          'isn\'t being blocked or quarantined, and you\'re not receiving reports about it either — in its ' +
+          'current state, the record isn\'t actively protecting your domain or giving you any visibility into ' +
+          'abuse. Add "rua=mailto:you@yourdomain.com" and consider moving to "p=quarantine" or "p=reject" once ' +
+          'you\'ve reviewed the reports.'
+        );
+      } else if (dmarc.policy === 'reject' || dmarc.policy === 'quarantine') {
+        recommendations.push(
+          'Your DMARC policy is enforcing correctly, but there\'s no "rua" reporting address set, so you have ' +
+          'no visibility into what mail is being blocked or quarantined on your behalf. Add ' +
+          '"rua=mailto:you@yourdomain.com" to your DMARC record to start receiving aggregate reports.'
+        );
+      }
+    }
   } else {
     recommendations.push(
       'No DMARC record found. Add a TXT record at "_dmarc.yourdomain.com" (e.g. "v=DMARC1; p=none; rua=mailto:you@yourdomain.com") ' +
