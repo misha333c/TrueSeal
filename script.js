@@ -30,13 +30,21 @@ button.addEventListener('click', async () => {
   }
 });
 
+function dkimStatusText(dkim) {
+  if (dkim.found) return `Found (selector: ${dkim.selector})`;
+  if (dkim.status === 'revoked') {
+    return `Found, but inactive — empty public key (selector: "${dkim.selector}")`;
+  }
+  return 'Not found among common selectors';
+}
+
 function renderResult(data) {
   const lines = [];
 
   lines.push(`Score: ${data.score} / 100`);
   lines.push('');
   lines.push(`SPF: ${data.spf.found ? 'Found' : 'Not found'}`);
-  lines.push(`DKIM: ${data.dkim.found ? `Found (selector: ${data.dkim.selector})` : 'Not found among common selectors'}`);
+  lines.push(`DKIM: ${dkimStatusText(data.dkim)}`);
   lines.push(`DMARC: ${data.dmarc.found ? `Found (policy: ${data.dmarc.policy || 'none specified'})` : 'Not found'}`);
   lines.push('');
   lines.push('Recommendations:');

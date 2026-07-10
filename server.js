@@ -50,25 +50,36 @@ async function checkDmarc(domain) {
 }
 
 async function checkDkim(domain) {
+  // Some zones (notably example.com) publish a wildcard DKIM record under
+  // every selector with an empty "p=" — that's a revoked/placeholder key,
+  // not a usable one, so it doesn't count as a real match. But it's still
+  // meaningfully different from no record at all, so we remember the first
+  // one we see and keep looking for a selector with an actual working key.
+  let revoked = null;
+
   for (const selector of COMMON_DKIM_SELECTORS) {
     try {
       const records = await dns.resolveTxt(`${selector}._domainkey.${domain}`);
       const flat = records.map(parts => parts.join(''));
       const dkim = flat.find(txt => txt.includes('v=DKIM1'));
       if (dkim) {
-        // Some zones (notably example.com) publish a wildcard DKIM record
-        // under every selector with an empty "p=" — that's a revoked/placeholder
-        // key, not a usable one, so it doesn't count as a real match.
         const publicKeyMatch = dkim.match(/p=([^;]*)/);
         const publicKey = publicKeyMatch ? publicKeyMatch[1].trim() : '';
-        if (!publicKey) continue;
-        return { found: true, selector, record: dkim };
+        if (!publicKey) {
+          if (!revoked) revoked = { selector, record: dkim };
+          continue;
+        }
+        return { found: true, status: 'found', selector, record: dkim };
       }
     } catch (err) {
       // that selector doesn't exist, try the next one
     }
   }
-  return { found: false, selector: null, record: null };
+
+  if (revoked) {
+    return { found: false, status: 'revoked', selector: revoked.selector, record: revoked.record };
+  }
+  return { found: false, status: 'not_found', selector: null, record: null };
 }
 
 function buildScoreAndAdvice(spf, dkim, dmarc) {
@@ -86,6 +97,13 @@ function buildScoreAndAdvice(spf, dkim, dmarc) {
 
   if (dkim.found) {
     score += 30;
+  } else if (dkim.status === 'revoked') {
+    recommendations.push(
+      `A DKIM record was found (selector "${dkim.selector}"), but it has no public key, which means it's ` +
+      'inactive — either it was intentionally disabled/revoked, or the setup was never finished. Mail ' +
+      'signed with this selector will fail DKIM checks. Contact your email provider to re-enable it with a ' +
+      'real key, or remove the stale record if it\'s no longer needed.'
+    );
   } else {
     recommendations.push(
       'No DKIM record found for common selectors. Check your email provider\'s dashboard for their ' +
