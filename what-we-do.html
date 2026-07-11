@@ -22,8 +22,21 @@
   </header>
 
   <main class="page-content">
-    <h1>What We Do</h1>
-    <p>Placeholder content — details on what this tool does are coming soon.</p>
+    <h1>Your emails are being judged before anyone reads them.</h1>
+    <p>Every time you send an email, the receiving server (Gmail, Outlook, whoever) quietly checks whether it's really from you. It does this by looking up a few DNS records tied to your domain. Get them right, and your mail lands in the inbox. Get them wrong, missing, or misconfigured, and it can land in spam, get rejected outright, or, worse, let someone else send email pretending to be you.</p>
+    <p>Most domain owners have no idea these records even exist, let alone whether theirs are set up correctly.</p>
+
+    <h2>We check three things:</h2>
+    <ul>
+      <li><strong>SPF</strong>: a list of which servers are allowed to send email on your behalf. If it's missing, anyone can claim to send as you. If it's misconfigured (which happens more than you'd think, like multiple conflicting records or too many linked services), it can silently stop working even though it looks fine.</li>
+      <li><strong>DKIM</strong>: a digital signature proving an email wasn't altered in transit. Without it, there's no way to verify a message is untouched and genuinely from your servers.</li>
+      <li><strong>DMARC</strong>: the policy that tells receiving servers what to do when SPF or DKIM checks fail: let it through, send it to spam, or block it outright. No DMARC record means no instructions, so receiving servers are left guessing.</li>
+    </ul>
+
+    <h2>What makes this different from just running dig yourself:</h2>
+    <p>We don't just tell you pass or fail. We tell you why, explain the parts that are genuinely ambiguous (some checks, like DKIM, can't be fully verified from outside, and we say so instead of guessing), and flag the sneaky failure modes that look fine at a glance but silently break, like SPF records that quietly exceed a hidden DNS lookup limit.</p>
+
+    <p class="callout"><a href="index.html">Run a check. Understand what it means. Fix what needs fixing.</a></p>
   </main>
 
   <footer class="site-footer">
