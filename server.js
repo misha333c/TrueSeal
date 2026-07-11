@@ -65,6 +65,68 @@ async function domainExists(domain) {
   }
 }
 
+// Same lookup rule RFC 7208 §4.6.4 caps at 10 for real evaluation; we allow
+// deeper recursion (15) purely so counting can surface a runaway chain
+// instead of silently truncating it at the same limit that flags it.
+const MAX_SPF_RECURSION_DEPTH = 15;
+
+// Fetches the single v=spf1 TXT record for a domain, for recursive lookup
+// counting only. Anything that isn't exactly one record (missing, or
+// multiple/permerror) contributes no further lookups, so this returns null.
+async function fetchSpfRecordForCounting(domain) {
+  try {
+    const records = await dns.resolveTxt(domain);
+    const flat = records.map(parts => parts.join(''));
+    const spfRecords = flat.filter(txt => txt.startsWith('v=spf1'));
+    return spfRecords.length === 1 ? spfRecords[0] : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+// RFC 7208 §4.6.4: counts the mechanisms/modifiers that each cost one DNS
+// lookup (include, a, mx, ptr, exists, redirect) — ip4/ip6/all are free.
+// Recurses into include:/redirect= targets, tracking visited domains in the
+// current chain to break circular includes, and stops past
+// MAX_SPF_RECURSION_DEPTH so a pathological chain can't recurse forever.
+async function countSpfLookups(domain, record, visited = new Set(), depth = 0) {
+  if (depth > MAX_SPF_RECURSION_DEPTH || visited.has(domain)) {
+    return 0;
+  }
+  visited.add(domain);
+
+  const tokens = record.split(/\s+/).filter(Boolean);
+  let count = 0;
+
+  for (const token of tokens) {
+    const mechanism = token.replace(/^[+\-~?]/, '');
+
+    let target = null;
+    if (mechanism.startsWith('include:')) {
+      target = mechanism.slice('include:'.length);
+    } else if (mechanism.startsWith('redirect=')) {
+      target = mechanism.slice('redirect='.length);
+    }
+
+    if (target !== null) {
+      count += 1;
+      const targetRecord = await fetchSpfRecordForCounting(target);
+      if (targetRecord) {
+        count += await countSpfLookups(target, targetRecord, visited, depth + 1);
+      }
+    } else if (
+      mechanism === 'a' || mechanism.startsWith('a:') || mechanism.startsWith('a/') ||
+      mechanism === 'mx' || mechanism.startsWith('mx:') || mechanism.startsWith('mx/') ||
+      mechanism === 'ptr' || mechanism.startsWith('ptr:') ||
+      mechanism.startsWith('exists:')
+    ) {
+      count += 1;
+    }
+  }
+
+  return count;
+}
+
 async function checkSpf(domain) {
   try {
     const records = await dns.resolveTxt(domain);
@@ -72,7 +134,7 @@ async function checkSpf(domain) {
     const spfRecords = flat.filter(txt => txt.startsWith('v=spf1'));
 
     if (spfRecords.length === 0) {
-      return { found: false, status: 'not_found', record: null, records: [], tags: {} };
+      return { found: false, status: 'not_found', record: null, records: [], tags: {}, lookupCount: 0 };
     }
 
     // RFC 7208: a domain must publish exactly one SPF record. Two or more
@@ -80,13 +142,14 @@ async function checkSpf(domain) {
     // treat as an outright SPF failure — so this is not just "the first
     // one wins", it invalidates SPF for the domain entirely.
     if (spfRecords.length >= 2) {
-      return { found: false, status: 'multiple_records', record: null, records: spfRecords, tags: {} };
+      return { found: false, status: 'multiple_records', record: null, records: spfRecords, tags: {}, lookupCount: 0 };
     }
 
     const spf = spfRecords[0];
-    return { found: true, status: 'found', record: spf, records: spfRecords, tags: parseRecordTags(spf) };
+    const lookupCount = await countSpfLookups(domain, spf);
+    return { found: true, status: 'found', record: spf, records: spfRecords, tags: parseRecordTags(spf), lookupCount };
   } catch (err) {
-    return { found: false, status: 'not_found', record: null, records: [], tags: {} };
+    return { found: false, status: 'not_found', record: null, records: [], tags: {}, lookupCount: 0 };
   }
 }
 
@@ -148,8 +211,21 @@ function buildScoreAndAdvice(spf, dkim, dmarc) {
   let score = 0;
   const recommendations = [];
 
-  if (spf.found) {
+  if (spf.found && spf.lookupCount >= 10) {
+    recommendations.push(
+      `This domain's SPF record requires ${spf.lookupCount} DNS lookups, which exceeds RFC 7208's 10-lookup ` +
+      'limit — so SPF is already failing (permerror) for receiving mail servers even though a record exists. ' +
+      'Consolidate "include:" mechanisms or use SPF flattening to reduce the lookup count below 10.'
+    );
+  } else if (spf.found) {
     score += 30;
+    if (spf.lookupCount >= 8) {
+      recommendations.push(
+        `This domain's SPF record is close to SPF's 10-DNS-lookup limit (RFC 7208), currently at ` +
+        `${spf.lookupCount} of 10. Adding more third-party sending services (marketing tools, CRMs, etc.) ` +
+        'risks pushing it over the limit and causing SPF to fail entirely (permerror) for receiving mail servers.'
+      );
+    }
   } else if (spf.status === 'multiple_records') {
     recommendations.push(
       `Found ${spf.records.length} SPF records for this domain, which is invalid — RFC 7208 permits only ` +
