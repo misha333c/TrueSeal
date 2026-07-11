@@ -73,6 +73,61 @@ function scoreClass(score) {
   return 'score-poor';
 }
 
+// Builds the score circle: a track + arc SVG (arc fills clockwise from the
+// top, proportional to score/100) sitting directly on the page background,
+// with the number centered on top via a grid-overlaid label (reuses the
+// existing score-value/score-max classes and color-coding, unchanged from
+// the plain-number version). strokeWidth must match the CSS stroke-width
+// on .score-ring-track/.score-ring-fill, and radius is kept a few px
+// inside the viewBox edge so the stroke never clips.
+function createScoreRing(score) {
+  const cls = scoreClass(score);
+  const size = 170;
+  const strokeWidth = 14;
+  const radius = size / 2 - strokeWidth;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference * (1 - score / 100);
+
+  const wrap = document.createElement('div');
+  wrap.className = 'score-ring';
+
+  const svgNs = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNs, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${size} ${size}`);
+
+  const track = document.createElementNS(svgNs, 'circle');
+  track.setAttribute('class', 'score-ring-track');
+  track.setAttribute('cx', size / 2);
+  track.setAttribute('cy', size / 2);
+  track.setAttribute('r', radius);
+
+  const fill = document.createElementNS(svgNs, 'circle');
+  fill.setAttribute('class', `score-ring-fill ${cls}`);
+  fill.setAttribute('cx', size / 2);
+  fill.setAttribute('cy', size / 2);
+  fill.setAttribute('r', radius);
+  fill.setAttribute('stroke-dasharray', circumference);
+  fill.setAttribute('stroke-dashoffset', offset);
+
+  svg.appendChild(track);
+  svg.appendChild(fill);
+
+  const label = document.createElement('div');
+  label.className = 'score-ring-label';
+  const scoreValue = document.createElement('span');
+  scoreValue.className = `score-value ${cls}`;
+  scoreValue.textContent = score;
+  const scoreMax = document.createElement('span');
+  scoreMax.className = `score-max ${cls}`;
+  scoreMax.textContent = '/ 100';
+  label.appendChild(scoreValue);
+  label.appendChild(scoreMax);
+
+  wrap.appendChild(svg);
+  wrap.appendChild(label);
+  return wrap;
+}
+
 // Builds the collapsed-by-default "Show technical details" panel with the
 // raw record exactly as returned, plus every key=value tag parsed out of it
 // (adkim, aspf, pct, rua, etc.) shown as-is, without interpreting them.
@@ -176,7 +231,7 @@ function createScoreExplainer() {
 
 // status: 'pass' | 'warn' | 'fail'
 function createCheckItem(status, label, detail, record, tags, note) {
-  const li = document.createElement('li');
+  const li = document.createElement('div');
   li.className = `check ${status}`;
 
   const icon = document.createElement('span');
@@ -260,22 +315,26 @@ function dmarcCheckItem(dmarc) {
 function renderResult(data) {
   result.replaceChildren();
 
-  const scoreRow = document.createElement('div');
-  scoreRow.className = 'score-row';
-  const scoreValue = document.createElement('span');
-  scoreValue.className = `score-value ${scoreClass(data.score)}`;
-  scoreValue.textContent = data.score;
-  const scoreMax = document.createElement('span');
-  scoreMax.className = `score-max ${scoreClass(data.score)}`;
-  scoreMax.textContent = '/ 100';
-  scoreRow.appendChild(scoreValue);
-  scoreRow.appendChild(scoreMax);
+  const grid = document.createElement('div');
+  grid.className = 'result-grid';
 
-  const checks = document.createElement('ul');
-  checks.className = 'checks';
-  checks.appendChild(spfCheckItem(data.spf));
-  checks.appendChild(dkimCheckItem(data.dkim));
-  checks.appendChild(dmarcCheckItem(data.dmarc));
+  const scoreCol = document.createElement('div');
+  scoreCol.className = 'result-col result-col-score';
+  scoreCol.appendChild(createScoreRing(data.score));
+  scoreCol.appendChild(createScoreExplainer());
+
+  const dkimCol = document.createElement('div');
+  dkimCol.className = 'result-col';
+  dkimCol.appendChild(dkimCheckItem(data.dkim));
+
+  const dmarcSpfCol = document.createElement('div');
+  dmarcSpfCol.className = 'result-col';
+  dmarcSpfCol.appendChild(spfCheckItem(data.spf));
+  dmarcSpfCol.appendChild(dmarcCheckItem(data.dmarc));
+
+  grid.appendChild(scoreCol);
+  grid.appendChild(dkimCol);
+  grid.appendChild(dmarcSpfCol);
 
   const recommendations = document.createElement('div');
   recommendations.className = 'recommendations';
@@ -290,8 +349,6 @@ function renderResult(data) {
   recommendations.appendChild(heading);
   recommendations.appendChild(list);
 
-  result.appendChild(scoreRow);
-  result.appendChild(createScoreExplainer());
-  result.appendChild(checks);
+  result.appendChild(grid);
   result.appendChild(recommendations);
 }

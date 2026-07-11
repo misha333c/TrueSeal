@@ -5,14 +5,24 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Email Domain Checker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 
-<body>
+<body class="home">
 
   <header class="site-header">
     <nav class="site-nav">
-      <a href="index.html" class="site-wordmark">Email Domain Checker</a>
+      <a href="index.html" class="site-wordmark">
+        <svg class="seal-icon" viewBox="0 0 32 32" aria-hidden="true">
+          <circle class="seal-fill" cx="16" cy="16" r="14" />
+          <circle class="seal-ring" cx="16" cy="16" r="14" fill="none" stroke-width="1.5" />
+          <path class="seal-mark" d="M16 9.5l1.9 3.9 4.3.6-3.1 3 .7 4.3-3.8-2-3.8 2 .7-4.3-3.1-3 4.3-.6z" />
+        </svg>
+        Email Domain Checker
+      </a>
       <ul class="site-nav-links">
         <li><a href="what-we-do.html">What We Do</a></li>
         <li><a href="glossary.html">Glossary</a></li>
@@ -21,16 +31,55 @@
     </nav>
   </header>
 
-  <main class="container">
-    <h1>Email Domain Checker</h1>
-    <p>Enter a domain to check its SPF, DKIM, and DMARC records.</p>
+  <main class="hero">
+    <div class="hero-copy">
+      <p class="hero-eyebrow">Email authentication, demystified</p>
+      <h1 class="hero-headline">Your emails are being <span class="hero-accent">judged</span> before anyone reads
+        them.</h1>
+      <p class="hero-subhead">Enter a domain and see exactly which authentication checks it passes, fails, or
+        leaves ambiguous — in plain English, not raw DNS output.</p>
+    </div>
 
-    <div class="input-row">
-      <input type="text" id="domain-input" placeholder="example.com">
-      <button id="check-button">Check</button>
+    <div class="hero-product-frame">
+      <div class="container">
+        <h1>Email Domain Checker</h1>
+        <p>Enter a domain to check its SPF, DKIM, and DMARC records.</p>
+
+        <div class="input-row">
+          <input type="text" id="domain-input" placeholder="example.com">
+          <button id="check-button">Check</button>
+        </div>
+      </div>
     </div>
 
     <div id="result" class="result"></div>
+
+    <div class="trust-points">
+      <div class="trust-point">
+        <svg class="seal-icon seal-icon--sm" viewBox="0 0 32 32" aria-hidden="true">
+          <circle class="seal-fill" cx="16" cy="16" r="14" />
+          <circle class="seal-ring" cx="16" cy="16" r="14" fill="none" stroke-width="1.5" />
+          <path class="seal-mark" d="M16 9.5l1.9 3.9 4.3.6-3.1 3 .7 4.3-3.8-2-3.8 2 .7-4.3-3.1-3 4.3-.6z" />
+        </svg>
+        <p>Every check pulls live DNS records — no cached guesses, no stale data.</p>
+      </div>
+      <div class="trust-point">
+        <svg class="seal-icon seal-icon--sm" viewBox="0 0 32 32" aria-hidden="true">
+          <circle class="seal-fill" cx="16" cy="16" r="14" />
+          <circle class="seal-ring" cx="16" cy="16" r="14" fill="none" stroke-width="1.5" />
+          <path class="seal-mark" d="M16 9.5l1.9 3.9 4.3.6-3.1 3 .7 4.3-3.8-2-3.8 2 .7-4.3-3.1-3 4.3-.6z" />
+        </svg>
+        <p>We explain why something failed, not just that it did.</p>
+      </div>
+      <div class="trust-point">
+        <svg class="seal-icon seal-icon--sm" viewBox="0 0 32 32" aria-hidden="true">
+          <circle class="seal-fill" cx="16" cy="16" r="14" />
+          <circle class="seal-ring" cx="16" cy="16" r="14" fill="none" stroke-width="1.5" />
+          <path class="seal-mark" d="M16 9.5l1.9 3.9 4.3.6-3.1 3 .7 4.3-3.8-2-3.8 2 .7-4.3-3.1-3 4.3-.6z" />
+        </svg>
+        <p>Some checks, like DKIM, can't be fully verified from outside — we say so instead of guessing.</p>
+      </div>
+    </div>
   </main>
 
   <footer class="site-footer">
