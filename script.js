@@ -130,6 +130,50 @@ function createTechDetails(record, tags) {
   return details;
 }
 
+// Builds the collapsed-by-default "What does this mean?" panel that explains
+// the score in plain language, reusing the same tech-details/tech-content
+// classes as "Show technical details" so it matches that toggle/arrow style.
+function createScoreExplainer() {
+  const details = document.createElement('details');
+  details.className = 'tech-details score-explainer';
+
+  const summary = document.createElement('summary');
+  summary.textContent = 'What does this mean?';
+  details.appendChild(summary);
+
+  const content = document.createElement('div');
+  content.className = 'tech-content';
+
+  const intro = document.createElement('p');
+  intro.className = 'score-explainer-text';
+  intro.textContent = 'Your score reflects whether your domain has three protections set up that stop other people from sending fake emails pretending to be you.';
+  content.appendChild(intro);
+
+  const list = document.createElement('ul');
+  list.className = 'score-explainer-list';
+  [
+    ['SPF', ' is like a guest list, it says which servers are allowed to send mail as you.'],
+    ['DKIM', " is like a wax seal, it proves an email wasn't tampered with on the way."],
+    ['DMARC', ' is the instructions for what happens when something looks fake, whether it gets blocked, sent to spam, or let through anyway.']
+  ].forEach(([term, rest]) => {
+    const li = document.createElement('li');
+    const strong = document.createElement('strong');
+    strong.textContent = term;
+    li.appendChild(strong);
+    li.appendChild(document.createTextNode(rest));
+    list.appendChild(li);
+  });
+  content.appendChild(list);
+
+  const closing = document.createElement('p');
+  closing.className = 'score-explainer-text';
+  closing.textContent = "A higher score means more of these are set up correctly. It's not an official industry score, just a quick way to see where you stand and what to fix first. Check the recommendations below for exactly what to do next.";
+  content.appendChild(closing);
+
+  details.appendChild(content);
+  return details;
+}
+
 // status: 'pass' | 'warn' | 'fail'
 function createCheckItem(status, label, detail, record, tags, note) {
   const li = document.createElement('li');
@@ -247,6 +291,7 @@ function renderResult(data) {
   recommendations.appendChild(list);
 
   result.appendChild(scoreRow);
+  result.appendChild(createScoreExplainer());
   result.appendChild(checks);
   result.appendChild(recommendations);
 }
