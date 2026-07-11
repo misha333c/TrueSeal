@@ -23,7 +23,66 @@
 
   <main class="page-content">
     <h1>Glossary</h1>
-    <p>Placeholder content — definitions of SPF, DKIM, DMARC and related terms are coming soon.</p>
+    <p>Plain-English definitions for the terms you'll see in your results.</p>
+
+    <dl class="glossary-list">
+      <div class="glossary-entry">
+        <dt>SPF (Sender Policy Framework)</dt>
+        <dd>a DNS record listing which mail servers are allowed to send email for your domain. Receiving servers check this list before trusting a message.</dd>
+      </div>
+
+      <div class="glossary-entry">
+        <dt>DKIM (DomainKeys Identified Mail)</dt>
+        <dd>a digital signature attached to outgoing email, proving the message wasn't altered after it was sent and genuinely came from your servers.</dd>
+      </div>
+
+      <div class="glossary-entry">
+        <dt>DMARC (Domain-based Message Authentication, Reporting and Conformance)</dt>
+        <dd>a policy record that tells receiving servers what to do when SPF or DKIM checks fail, and where to send reports about it.</dd>
+      </div>
+
+      <div class="glossary-entry">
+        <dt>TXT record</dt>
+        <dd>a type of DNS record that holds plain text. SPF and DMARC are both published as TXT records. DKIM is published as a TXT record at a special address tied to a selector (see below).</dd>
+      </div>
+
+      <div class="glossary-entry">
+        <dt>Selector</dt>
+        <dd>a name that points to where a domain's DKIM key is published in DNS (for example, google._domainkey.yourdomain.com). There's no way to look up a domain's selector directly, it has to be known or guessed, which is why DKIM detection is never 100% certain.</dd>
+      </div>
+
+      <div class="glossary-entry">
+        <dt>Permerror ('permanent error')</dt>
+        <dd>what happens when SPF is misconfigured in a way that can't be resolved, like having more than one SPF record, or a record requiring too many DNS lookups. When this happens, SPF fails entirely for that domain, even if the individual records look correct on their own.</dd>
+      </div>
+
+      <div class="glossary-entry">
+        <dt>DNS lookup limit</dt>
+        <dd>SPF allows a maximum of 10 DNS lookups when a record and everything it includes are added up. Go over that limit, and SPF returns a permerror, silently breaking authentication.</dd>
+      </div>
+
+      <div class="glossary-entry">
+        <dt>Policy (p=)</dt>
+        <dd>
+          the DMARC setting that tells receiving servers how to handle mail that fails authentication.
+          <ul>
+            <li><strong>p=none</strong>: take no action, just send reports (monitoring only).</li>
+            <li><strong>p=quarantine</strong>: send failing mail to spam.</li>
+            <li><strong>p=reject</strong>: block failing mail outright.</li>
+          </ul>
+        </dd>
+      </div>
+
+      <div class="glossary-entry">
+        <dt>rua</dt>
+        <dd>the email address in a DMARC record that receives aggregate reports, a regular summary of who's sending mail as your domain and whether it's passing or failing checks.</dd>
+      </div>
+
+      <div class="glossary-entry">
+        <dt>ruf</dt>
+        <dd>similar to rua, but for forensic reports, more detailed reports about individual failing messages. Less commonly used than rua.</dd>
+      </div>
+    </dl>
   </main>
 
   <footer class="site-footer">
