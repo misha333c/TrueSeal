@@ -12,6 +12,11 @@
   --orange: #fb923c;
   --red: #f87171;
   --placeholder: #c2c2c2;
+  --font-heading: system-ui, sans-serif;
+  --font-body: system-ui, sans-serif;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 32px;
 }
 
 body {
@@ -19,8 +24,8 @@ body {
   background: var(--bg);
   color: var(--text);
   display: flex;
-  justify-content: center;
-  padding-top: 80px;
+  flex-direction: column;
+  align-items: center;
   margin: 0;
 }
 
@@ -32,6 +37,7 @@ body {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   width: 400px;
   text-align: center;
+  margin-top: 80px;
 }
 
 .container h1 {
@@ -360,4 +366,105 @@ body {
 .notice.nonexistent .notice-icon {
   background: rgba(248, 113, 113, 0.15);
   color: var(--red);
+}
+
+/* Site header / nav */
+
+.site-header {
+  width: 100%;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.site-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  max-width: 960px;
+  margin: 0 auto;
+  padding: var(--space-md) var(--space-lg);
+  font-family: var(--font-body);
+}
+
+.site-wordmark {
+  font-family: var(--font-heading);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.site-wordmark:hover {
+  color: var(--accent);
+}
+
+.site-nav-links {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+  margin: 0;
+  padding: 0;
+}
+
+.site-nav-links a {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.site-nav-links a:hover,
+.site-nav-links a[aria-current="page"] {
+  color: var(--accent);
+}
+
+@media (max-width: 600px) {
+  .site-nav {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-sm);
+  }
+}
+
+/* Site footer */
+
+.site-footer {
+  width: 100%;
+  margin-top: auto;
+  border-top: 1px solid var(--border);
+}
+
+.site-footer p {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: var(--space-md) var(--space-lg);
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* Placeholder page content (What We Do / Glossary / About) */
+
+.page-content {
+  max-width: 640px;
+  margin: 80px auto 0;
+  padding: 0 var(--space-lg);
+  text-align: center;
+}
+
+.page-content h1 {
+  font-family: var(--font-heading);
+  font-size: 28px;
+  margin: 0 0 var(--space-sm);
+  color: var(--text);
+}
+
+.page-content p {
+  font-family: var(--font-body);
+  color: var(--text-muted);
+  font-size: 15px;
+  line-height: 1.6;
 }
