@@ -252,14 +252,15 @@ body {
 }
 
 /* Main result layout: column 1 is the score ring + explainer, column 2 is
-   DKIM, column 3 stacks DMARC above SPF. align-items: start lets each
-   column size to its own content height instead of stretching to match
-   the tallest one. */
+   DKIM, column 3 stacks DMARC above SPF. align-items: stretch makes every
+   column match the row's height (set by DKIM, the longest column), so
+   .result-col-score's justify-content: center has full-height room to
+   center the ring + link within. */
 
 .result-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  align-items: start;
+  align-items: stretch;
   gap: 12px;
   margin: 0 0 20px;
 }
@@ -277,7 +278,11 @@ body {
 }
 
 .result-col-score {
+  display: flex;
+  flex-direction: column;
   align-items: center;
+  justify-content: center;
+  align-self: stretch;
   text-align: center;
 }
 
