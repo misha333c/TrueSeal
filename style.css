@@ -28,6 +28,7 @@
 
 html {
   scroll-behavior: smooth;
+  overflow-x: hidden;
 }
 
 body {
@@ -38,6 +39,7 @@ body {
   flex-direction: column;
   align-items: center;
   margin: 0;
+  overflow-x: hidden;
 }
 
 .container {
@@ -103,6 +105,46 @@ body {
 #check-button:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+/* Narrow screens: the checker tool's fixed-px widths (.hero-product-frame
+   is a shrink-to-fit flex item, so .container's `width: 800px; max-width:
+   100%` never actually gets clamped by the viewport) overflow small
+   viewports. Give the frame/container/result a definite, viewport-relative
+   width instead, and stack the input/button which no longer fit side by
+   side once the row is that narrow. */
+
+@media (max-width: 600px) {
+  .hero {
+    box-sizing: border-box;
+  }
+
+  .hero-product-frame {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .container {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 24px 20px;
+  }
+
+  .result {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .input-row {
+    flex-direction: column;
+    max-width: 100%;
+  }
+
+  #domain-input,
+  #check-button {
+    width: 100%;
+    box-sizing: border-box;
+  }
 }
 
 /* Result area — lives directly on the light page below the tool's dark
@@ -959,4 +1001,30 @@ body {
   font-size: 13px;
   line-height: 1.5;
   color: var(--ink-muted);
+}
+
+/* Small icon-only links (e.g. About page contact/social) */
+
+.about-links {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--ink-muted);
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.icon-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
 }
