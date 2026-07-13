@@ -70,6 +70,14 @@ async function domainExists(domain) {
 // instead of silently truncating it at the same limit that flags it.
 const MAX_SPF_RECURSION_DEPTH = 15;
 
+// Caps the total number of DNS lookups performed across the whole recursive
+// count for a single request, separate from the depth cap above — without
+// this, a domain with many include: mechanisms spread across multiple levels
+// could still trigger an excessive number of sequential DNS queries even
+// while staying under the depth limit. 50 is a generous ceiling well above
+// any real-world case (real domains stay under 10).
+const MAX_SPF_TOTAL_LOOKUPS = 50;
+
 // Fetches the single v=spf1 TXT record for a domain, for recursive lookup
 // counting only. Anything that isn't exactly one record (missing, or
 // multiple/permerror) contributes no further lookups, so this returns null.
@@ -89,7 +97,7 @@ async function fetchSpfRecordForCounting(domain) {
 // Recurses into include:/redirect= targets, tracking visited domains in the
 // current chain to break circular includes, and stops past
 // MAX_SPF_RECURSION_DEPTH so a pathological chain can't recurse forever.
-async function countSpfLookups(domain, record, visited = new Set(), depth = 0) {
+async function countSpfLookups(domain, record, visited = new Set(), depth = 0, counter = { total: 0 }) {
   if (depth > MAX_SPF_RECURSION_DEPTH || visited.has(domain)) {
     return 0;
   }
@@ -99,6 +107,12 @@ async function countSpfLookups(domain, record, visited = new Set(), depth = 0) {
   let count = 0;
 
   for (const token of tokens) {
+    // Total-lookup cap: once we've hit it, stop issuing further DNS queries
+    // anywhere in the recursion and return what we have so far.
+    if (counter.total >= MAX_SPF_TOTAL_LOOKUPS) {
+      break;
+    }
+
     const mechanism = token.replace(/^[+\-~?]/, '');
 
     let target = null;
@@ -110,9 +124,10 @@ async function countSpfLookups(domain, record, visited = new Set(), depth = 0) {
 
     if (target !== null) {
       count += 1;
+      counter.total += 1;
       const targetRecord = await fetchSpfRecordForCounting(target);
       if (targetRecord) {
-        count += await countSpfLookups(target, targetRecord, visited, depth + 1);
+        count += await countSpfLookups(target, targetRecord, visited, depth + 1, counter);
       }
     } else if (
       mechanism === 'a' || mechanism.startsWith('a:') || mechanism.startsWith('a/') ||
@@ -121,6 +136,7 @@ async function countSpfLookups(domain, record, visited = new Set(), depth = 0) {
       mechanism.startsWith('exists:')
     ) {
       count += 1;
+      counter.total += 1;
     }
   }
 
