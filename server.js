@@ -1,4 +1,5 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const dns = require('dns').promises;
 const psl = require('psl');
 
@@ -7,6 +8,17 @@ const PORT = 3000;
 
 // Serve index.html, style.css, script.js from this same folder
 app.use(express.static(__dirname));
+
+// Each /check request can trigger multiple real DNS lookups (SPF recursion,
+// DKIM selector probing, etc.), so this endpoint specifically is rate
+// limited to prevent abuse from tying up outbound DNS.
+const checkLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again in a minute.' }
+});
 
 // Common DKIM selectors used by popular email providers.
 // There's no DNS way to discover a domain's selector, so we just try the
@@ -330,7 +342,7 @@ function buildScoreAndAdvice(spf, dkim, dmarc) {
   return { score, recommendations };
 }
 
-app.get('/check', async (req, res) => {
+app.get('/check', checkLimiter, async (req, res) => {
   const domain = (req.query.domain || '').trim().toLowerCase();
 
   if (!domain) {
