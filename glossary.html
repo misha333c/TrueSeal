@@ -22,67 +22,111 @@
   </header>
 
   <main class="page-content">
-    <h1>Glossary</h1>
-    <p>Plain-English definitions for the terms you'll see in your results.</p>
+    <div class="page-layout">
+      <div class="page-main">
+        <p class="hero-eyebrow">Reference</p>
+        <h1>Glossary</h1>
+        <p>Plain-English definitions for the terms you'll see in your results.</p>
 
-    <dl class="glossary-list">
-      <div class="glossary-entry">
-        <dt>SPF (Sender Policy Framework)</dt>
-        <dd>a DNS record listing which mail servers are allowed to send email for your domain. Receiving servers check this list before trusting a message.</dd>
+        <dl class="glossary-list">
+          <div class="glossary-entry">
+            <dt id="spf">SPF (Sender Policy Framework)</dt>
+            <dd>a DNS record listing which mail servers are allowed to send email for your domain. Receiving servers check this list before trusting a message.</dd>
+          </div>
+
+          <div class="glossary-entry">
+            <dt id="dkim">DKIM (DomainKeys Identified Mail)</dt>
+            <dd>a digital signature attached to outgoing email, proving the message wasn't altered after it was sent and genuinely came from your servers.</dd>
+          </div>
+
+          <div class="glossary-entry">
+            <dt id="dmarc">DMARC (Domain-based Message Authentication, Reporting and Conformance)</dt>
+            <dd>a policy record that tells receiving servers what to do when SPF or DKIM checks fail, and where to send reports about it.</dd>
+          </div>
+
+          <div class="glossary-entry">
+            <dt id="txt-record">TXT record</dt>
+            <dd>a type of DNS record that holds plain text. SPF and DMARC are both published as TXT records. DKIM is published as a TXT record at a special address tied to a selector (see below).</dd>
+          </div>
+
+          <div class="glossary-entry">
+            <dt id="selector">Selector</dt>
+            <dd>a name that points to where a domain's DKIM key is published in DNS (for example, google._domainkey.yourdomain.com). There's no way to look up a domain's selector directly, it has to be known or guessed, which is why DKIM detection is never 100% certain.</dd>
+          </div>
+
+          <div class="glossary-entry">
+            <dt id="permerror">Permerror ('permanent error')</dt>
+            <dd>what happens when SPF is misconfigured in a way that can't be resolved, like having more than one SPF record, or a record requiring too many DNS lookups. When this happens, SPF fails entirely for that domain, even if the individual records look correct on their own.</dd>
+          </div>
+
+          <div class="glossary-entry">
+            <dt id="dns-lookup-limit">DNS lookup limit</dt>
+            <dd>SPF allows a maximum of 10 DNS lookups when a record and everything it includes are added up. Go over that limit, and SPF returns a permerror, silently breaking authentication.</dd>
+          </div>
+
+          <div class="glossary-entry">
+            <dt id="policy">Policy (p=)</dt>
+            <dd>
+              the DMARC setting that tells receiving servers how to handle mail that fails authentication.
+              <ul class="policy-list">
+                <li>
+                  <svg class="seal-icon seal-icon--sm" viewBox="0 0 32 32" aria-hidden="true">
+                    <circle class="seal-fill" cx="16" cy="16" r="14" />
+                    <circle class="seal-ring" cx="16" cy="16" r="14" fill="none" stroke-width="1.5" />
+                    <path class="seal-mark" d="M16 9.5l1.9 3.9 4.3.6-3.1 3 .7 4.3-3.8-2-3.8 2 .7-4.3-3.1-3 4.3-.6z" />
+                  </svg>
+                  <span><strong>p=none</strong>: take no action, just send reports (monitoring only).</span>
+                </li>
+                <li>
+                  <svg class="seal-icon seal-icon--sm" viewBox="0 0 32 32" aria-hidden="true">
+                    <circle class="seal-fill" cx="16" cy="16" r="14" />
+                    <circle class="seal-ring" cx="16" cy="16" r="14" fill="none" stroke-width="1.5" />
+                    <path class="seal-mark" d="M16 9.5l1.9 3.9 4.3.6-3.1 3 .7 4.3-3.8-2-3.8 2 .7-4.3-3.1-3 4.3-.6z" />
+                  </svg>
+                  <span><strong>p=quarantine</strong>: send failing mail to spam.</span>
+                </li>
+                <li>
+                  <svg class="seal-icon seal-icon--sm" viewBox="0 0 32 32" aria-hidden="true">
+                    <circle class="seal-fill" cx="16" cy="16" r="14" />
+                    <circle class="seal-ring" cx="16" cy="16" r="14" fill="none" stroke-width="1.5" />
+                    <path class="seal-mark" d="M16 9.5l1.9 3.9 4.3.6-3.1 3 .7 4.3-3.8-2-3.8 2 .7-4.3-3.1-3 4.3-.6z" />
+                  </svg>
+                  <span><strong>p=reject</strong>: block failing mail outright.</span>
+                </li>
+              </ul>
+            </dd>
+          </div>
+
+          <div class="glossary-entry">
+            <dt id="rua">rua</dt>
+            <dd>the email address in a DMARC record that receives aggregate reports, a regular summary of who's sending mail as your domain and whether it's passing or failing checks.</dd>
+          </div>
+
+          <div class="glossary-entry">
+            <dt id="ruf">ruf</dt>
+            <dd>similar to rua, but for forensic reports, more detailed reports about individual failing messages. Less commonly used than rua.</dd>
+          </div>
+        </dl>
       </div>
 
-      <div class="glossary-entry">
-        <dt>DKIM (DomainKeys Identified Mail)</dt>
-        <dd>a digital signature attached to outgoing email, proving the message wasn't altered after it was sent and genuinely came from your servers.</dd>
-      </div>
-
-      <div class="glossary-entry">
-        <dt>DMARC (Domain-based Message Authentication, Reporting and Conformance)</dt>
-        <dd>a policy record that tells receiving servers what to do when SPF or DKIM checks fail, and where to send reports about it.</dd>
-      </div>
-
-      <div class="glossary-entry">
-        <dt>TXT record</dt>
-        <dd>a type of DNS record that holds plain text. SPF and DMARC are both published as TXT records. DKIM is published as a TXT record at a special address tied to a selector (see below).</dd>
-      </div>
-
-      <div class="glossary-entry">
-        <dt>Selector</dt>
-        <dd>a name that points to where a domain's DKIM key is published in DNS (for example, google._domainkey.yourdomain.com). There's no way to look up a domain's selector directly, it has to be known or guessed, which is why DKIM detection is never 100% certain.</dd>
-      </div>
-
-      <div class="glossary-entry">
-        <dt>Permerror ('permanent error')</dt>
-        <dd>what happens when SPF is misconfigured in a way that can't be resolved, like having more than one SPF record, or a record requiring too many DNS lookups. When this happens, SPF fails entirely for that domain, even if the individual records look correct on their own.</dd>
-      </div>
-
-      <div class="glossary-entry">
-        <dt>DNS lookup limit</dt>
-        <dd>SPF allows a maximum of 10 DNS lookups when a record and everything it includes are added up. Go over that limit, and SPF returns a permerror, silently breaking authentication.</dd>
-      </div>
-
-      <div class="glossary-entry">
-        <dt>Policy (p=)</dt>
-        <dd>
-          the DMARC setting that tells receiving servers how to handle mail that fails authentication.
-          <ul>
-            <li><strong>p=none</strong>: take no action, just send reports (monitoring only).</li>
-            <li><strong>p=quarantine</strong>: send failing mail to spam.</li>
-            <li><strong>p=reject</strong>: block failing mail outright.</li>
+      <aside class="page-rail">
+        <nav class="rail-card" aria-label="Jump to a term">
+          <p class="rail-label">Jump to a term</p>
+          <ul class="rail-jump-list">
+            <li><a href="#spf">SPF</a></li>
+            <li><a href="#dkim">DKIM</a></li>
+            <li><a href="#dmarc">DMARC</a></li>
+            <li><a href="#txt-record">TXT record</a></li>
+            <li><a href="#selector">Selector</a></li>
+            <li><a href="#permerror">Permerror</a></li>
+            <li><a href="#dns-lookup-limit">DNS lookup limit</a></li>
+            <li><a href="#policy">Policy</a></li>
+            <li><a href="#rua">rua</a></li>
+            <li><a href="#ruf">ruf</a></li>
           </ul>
-        </dd>
-      </div>
-
-      <div class="glossary-entry">
-        <dt>rua</dt>
-        <dd>the email address in a DMARC record that receives aggregate reports, a regular summary of who's sending mail as your domain and whether it's passing or failing checks.</dd>
-      </div>
-
-      <div class="glossary-entry">
-        <dt>ruf</dt>
-        <dd>similar to rua, but for forensic reports, more detailed reports about individual failing messages. Less commonly used than rua.</dd>
-      </div>
-    </dl>
+        </nav>
+      </aside>
+    </div>
   </main>
 
   <footer class="site-footer">
