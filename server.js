@@ -396,6 +396,16 @@ app.get('/check', checkLimiter, async (req, res) => {
   res.json({ domain, type: 'checked', spf, dkim, dmarc, score, recommendations });
 });
 
+// Global error handler — must be the last app.use() call (Express
+// identifies error-handling middleware by its 4-argument signature). Logs
+// the full error server-side for debugging, but never sends the error
+// message, stack trace, or other internal details in the response, since
+// that could leak internal file paths or implementation details to users.
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(500).json({ error: 'Something went wrong. Please try again.' });
+});
+
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
 });
