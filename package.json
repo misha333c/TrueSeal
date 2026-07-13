@@ -9,6 +9,7 @@
   "dependencies": {
     "express": "^4.22.2",
     "express-rate-limit": "^8.5.2",
+    "helmet": "^8.3.0",
     "psl": "^1.15.0"
   }
 }

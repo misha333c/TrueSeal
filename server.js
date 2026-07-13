@@ -1,10 +1,15 @@
 const express = require('express');
+const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const dns = require('dns').promises;
 const psl = require('psl');
 
 const app = express();
 const PORT = 3000;
+
+// Sets standard HTTP security headers (CSP, X-Frame-Options, etc.) using
+// helmet's defaults.
+app.use(helmet());
 
 // Serve index.html, style.css, script.js from this same folder
 app.use(express.static(__dirname));
@@ -347,6 +352,15 @@ app.get('/check', checkLimiter, async (req, res) => {
 
   if (!domain) {
     return res.status(400).json({ error: 'Please provide a domain.' });
+  }
+
+  // RFC 1035 caps a full domain name at 253 characters — reject anything
+  // longer here, before any DNS lookups are attempted, since it's clearly
+  // invalid/abusive input.
+  if (domain.length > 253) {
+    return res.status(400).json({
+      error: 'Domain is too long. Domain names cannot exceed 253 characters.'
+    });
   }
 
   if (!isValidDomainFormat(domain)) {
