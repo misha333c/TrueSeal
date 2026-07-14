@@ -229,14 +229,14 @@ function createScoreExplainer() {
   return details;
 }
 
-// status: 'pass' | 'warn' | 'fail'
+// status: 'pass' | 'warn' | 'fail' | 'info'
 function createCheckItem(status, label, detail, record, tags, note) {
   const li = document.createElement('div');
   li.className = `check ${status}`;
 
   const icon = document.createElement('span');
   icon.className = 'check-icon';
-  icon.textContent = status === 'pass' ? '✓' : status === 'warn' ? '!' : '✕';
+  icon.textContent = status === 'pass' ? '✓' : status === 'warn' ? '!' : status === 'info' ? 'i' : '✕';
 
   const body = document.createElement('div');
   body.className = 'check-body';
@@ -286,7 +286,19 @@ function spfCheckItem(spf) {
 
 function dkimCheckItem(dkim) {
   if (dkim.found) {
-    return createCheckItem('pass', 'DKIM', `Found (selector: ${dkim.selector})`, dkim.record, dkim.tags);
+    let detail = `Found (selector: ${dkim.selector})`;
+    let status = 'pass';
+    let note = null;
+    const keyStrength = dkim.keyStrength;
+    if (keyStrength && keyStrength.type && keyStrength.bits) {
+      detail += `, ${keyStrength.type.toUpperCase()}-${keyStrength.bits}`;
+      if (keyStrength.type === 'rsa' && keyStrength.bits < 1024) {
+        status = 'warn';
+        note = `This ${keyStrength.bits}-bit RSA key is weak — below the 1024-bit floor generally considered ` +
+          'secure against factoring attacks. It should be rotated to a 2048-bit key.';
+      }
+    }
+    return createCheckItem(status, 'DKIM', detail, dkim.record, dkim.tags, note);
   }
   if (dkim.status === 'revoked') {
     return createCheckItem(
@@ -309,7 +321,57 @@ function dmarcCheckItem(dmarc) {
   }
   const detail = `Found (policy: ${dmarc.policy || 'none specified'})`;
   const status = dmarc.policy === 'reject' ? 'pass' : 'warn';
-  return createCheckItem(status, 'DMARC', detail, dmarc.record, dmarc.tags);
+  const note = `Alignment — SPF: ${dmarc.alignment.spf}, DKIM: ${dmarc.alignment.dkim}. Relaxed (the default) ` +
+    'allows a subdomain match; strict requires the exact sending/signing domain to match.';
+  return createCheckItem(status, 'DMARC', detail, dmarc.record, dmarc.tags, note);
+}
+
+// Builds a single informational item for the "Additional signals" grid.
+// Status is 'pass' when found, 'info' (never 'fail') when not — most
+// domains haven't adopted these protocols yet, so absence isn't a
+// misconfiguration worth flagging as a failure.
+function extraCheckItem(label, data, description) {
+  const status = data.found ? 'pass' : 'info';
+  const detail = data.found ? 'Found' : 'Not found';
+  return createCheckItem(status, label, detail, data.record || null, null, description);
+}
+
+// Builds the "Additional signals" section: a 2x2 grid of newer/less-common
+// email security protocols that aren't part of the score above.
+function createExtrasSection(extras) {
+  const section = document.createElement('div');
+  section.className = 'extras-section';
+
+  const heading = document.createElement('h3');
+  heading.textContent = 'Additional signals';
+  section.appendChild(heading);
+
+  const subtitle = document.createElement('p');
+  subtitle.className = 'extras-subtitle';
+  subtitle.textContent = "Not part of the score above — these are newer or less common protocols, so their absence isn't a misconfiguration.";
+  section.appendChild(subtitle);
+
+  const grid = document.createElement('div');
+  grid.className = 'checks extras-grid';
+  grid.appendChild(extraCheckItem(
+    'MTA-STS', extras.mtaSts,
+    'Enforces TLS encryption for inbound mail, rejecting delivery over unencrypted or unauthenticated connections.'
+  ));
+  grid.appendChild(extraCheckItem(
+    'TLS-RPT', extras.tlsRpt,
+    'Requests reports about failed TLS connections when other mail servers try to deliver to this domain.'
+  ));
+  grid.appendChild(extraCheckItem(
+    'DNSSEC', extras.dnssec,
+    "Cryptographically signs DNS records so they can't be spoofed or tampered with in transit."
+  ));
+  grid.appendChild(extraCheckItem(
+    'BIMI', extras.bimi,
+    'Displays a verified brand logo next to authenticated emails in supporting inboxes.'
+  ));
+  section.appendChild(grid);
+
+  return section;
 }
 
 function renderResult(data) {
@@ -351,4 +413,5 @@ function renderResult(data) {
 
   result.appendChild(grid);
   result.appendChild(recommendations);
+  result.appendChild(createExtrasSection(data.extras));
 }

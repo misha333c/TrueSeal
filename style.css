@@ -326,6 +326,10 @@ body {
   border-left-color: var(--red);
 }
 
+.check.info {
+  border-left-color: var(--gold);
+}
+
 .check-icon {
   flex-shrink: 0;
   display: inline-flex;
@@ -352,6 +356,11 @@ body {
 .check.fail .check-icon {
   background: rgba(248, 113, 113, 0.15);
   color: var(--red);
+}
+
+.check.info .check-icon {
+  background: rgba(166, 129, 60, 0.15);
+  color: var(--gold);
 }
 
 .check-body {
@@ -512,6 +521,37 @@ body {
   font-size: 13px;
   line-height: 1.5;
   color: var(--ink);
+}
+
+.extras-section {
+  border-top: 1px solid var(--border);
+  margin-top: 20px;
+  padding-top: 16px;
+}
+
+.extras-section h3 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--ink-muted);
+  margin: 0 0 10px;
+}
+
+.extras-subtitle {
+  font-size: 12px;
+  color: var(--ink-muted);
+  margin: 0 0 12px;
+}
+
+.extras-grid {
+  grid-template-columns: repeat(2, 1fr);
+  margin: 0;
+}
+
+@media (max-width: 720px) {
+  .extras-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .notice {

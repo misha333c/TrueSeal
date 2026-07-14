@@ -3,6 +3,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const dns = require('dns').promises;
 const psl = require('psl');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = 3000;
@@ -59,6 +60,28 @@ function parseRecordTags(record) {
     if (key) tags[key] = value;
   });
   return tags;
+}
+
+// Parses a DKIM public key (base64, as published in the "p=" tag) to figure
+// out its algorithm and strength. ed25519 keys are a fixed 256 bits with no
+// ASN.1/DER wrapper, so they're reported directly; everything else is
+// assumed to be DER-encoded SubjectPublicKeyInfo and handed to Node's crypto
+// module to parse. Malformed/truncated keys are reported as unknown rather
+// than throwing, since a broken key is still worth showing to the user.
+function getDkimKeyStrength(publicKeyBase64, keyTypeTag) {
+  if (keyTypeTag === 'ed25519') {
+    return { type: 'ed25519', bits: 256 };
+  }
+  try {
+    const der = Buffer.from(publicKeyBase64, 'base64');
+    const keyObject = crypto.createPublicKey({ key: der, format: 'der', type: 'spki' });
+    if (keyObject.asymmetricKeyType === 'rsa') {
+      return { type: 'rsa', bits: keyObject.asymmetricKeyDetails.modulusLength };
+    }
+    return { type: keyObject.asymmetricKeyType, bits: null };
+  } catch (err) {
+    return { type: keyTypeTag || null, bits: null };
+  }
 }
 
 // Uses the public suffix list to find the registrable root domain (e.g.
@@ -195,7 +218,15 @@ async function checkDmarc(domain) {
 
     const policyMatch = dmarc.match(/p=(\w+)/);
     const policy = policyMatch ? policyMatch[1] : null;
-    return { found: true, record: dmarc, policy, tags: parseRecordTags(dmarc) };
+    const tags = parseRecordTags(dmarc);
+    // RFC 7489 §6.4: both adkim and aspf default to relaxed ('r') when the
+    // tag is absent, so this makes that effective default explicit — the
+    // raw tag dump above won't show a tag that isn't there.
+    const alignment = {
+      dkim: tags.adkim === 's' ? 'strict' : 'relaxed',
+      spf: tags.aspf === 's' ? 'strict' : 'relaxed'
+    };
+    return { found: true, record: dmarc, policy, tags, alignment };
   } catch (err) {
     return { found: false, record: null, policy: null, tags: {} };
   }
@@ -221,7 +252,9 @@ async function checkDkim(domain) {
           if (!revoked) revoked = { selector, record: dkim };
           continue;
         }
-        return { found: true, status: 'found', selector, record: dkim, tags: parseRecordTags(dkim) };
+        const tags = parseRecordTags(dkim);
+        const keyStrength = getDkimKeyStrength(publicKey, tags.k);
+        return { found: true, status: 'found', selector, record: dkim, tags, keyStrength };
       }
     } catch (err) {
       // that selector doesn't exist, try the next one
@@ -238,6 +271,58 @@ async function checkDkim(domain) {
     };
   }
   return { found: false, status: 'not_found', selector: null, record: null, tags: {} };
+}
+
+// The four checks below are informational only (not scored) — they surface
+// newer/less-common email security signals without penalizing domains that
+// haven't adopted them yet.
+
+async function checkMtaSts(domain) {
+  try {
+    const records = await dns.resolveTxt(`_mta-sts.${domain}`);
+    const flat = records.map(parts => parts.join(''));
+    const record = flat.find(txt => txt.startsWith('v=STSv1')) || null;
+    return { found: !!record, record };
+  } catch (err) {
+    return { found: false, record: null };
+  }
+}
+
+async function checkTlsRpt(domain) {
+  try {
+    const records = await dns.resolveTxt(`_smtp._tls.${domain}`);
+    const flat = records.map(parts => parts.join(''));
+    const record = flat.find(txt => txt.startsWith('v=TLSRPTv1')) || null;
+    return { found: !!record, record };
+  } catch (err) {
+    return { found: false, record: null };
+  }
+}
+
+async function checkBimi(domain) {
+  try {
+    const records = await dns.resolveTxt(`default._bimi.${domain}`);
+    const flat = records.map(parts => parts.join(''));
+    const record = flat.find(txt => txt.startsWith('v=BIMI1')) || null;
+    return { found: !!record, record };
+  } catch (err) {
+    return { found: false, record: null };
+  }
+}
+
+// Node's built-in dns module doesn't support 'DNSKEY' as a queryable rrtype,
+// so DNSSEC presence is checked via Google's DNS-over-HTTPS JSON API instead.
+async function checkDnssec(domain) {
+  try {
+    const res = await fetch(`https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=DNSKEY`, {
+      signal: AbortSignal.timeout(5000)
+    });
+    const data = await res.json();
+    const found = data.Status === 0 && Array.isArray(data.Answer) && data.Answer.some(r => r.type === 48);
+    return { found };
+  } catch (err) {
+    return { found: false };
+  }
 }
 
 function buildScoreAndAdvice(spf, dkim, dmarc) {
@@ -275,7 +360,22 @@ function buildScoreAndAdvice(spf, dkim, dmarc) {
   }
 
   if (dkim.found) {
-    score += 30;
+    const keyStrength = dkim.keyStrength || {};
+    if (keyStrength.type === 'rsa' && keyStrength.bits < 1024) {
+      score += 15;
+      recommendations.push(
+        `This domain's DKIM key (selector "${dkim.selector}") is only ${keyStrength.bits}-bit RSA, which is ` +
+        'below the 1024-bit floor generally considered secure against factoring attacks. Rotate to a 2048-bit key.'
+      );
+    } else {
+      score += 30;
+      if (keyStrength.type === 'rsa' && keyStrength.bits < 2048) {
+        recommendations.push(
+          `This domain's DKIM key (selector "${dkim.selector}") is ${keyStrength.bits}-bit RSA. It's not ` +
+          'insecure, but 2048-bit is the modern baseline — worth upgrading to next time DKIM settings are touched.'
+        );
+      }
+    }
   } else if (dkim.status === 'revoked') {
     recommendations.push(
       `A DKIM record was found (selector "${dkim.selector}"), but it has no public key, which means it's ` +
@@ -333,6 +433,21 @@ function buildScoreAndAdvice(spf, dkim, dmarc) {
         );
       }
     }
+
+    if (dmarc.policy === 'reject' || dmarc.policy === 'quarantine') {
+      const relaxedProtocols = [];
+      if (dmarc.alignment.spf === 'relaxed') relaxedProtocols.push('SPF');
+      if (dmarc.alignment.dkim === 'relaxed') relaxedProtocols.push('DKIM');
+      if (relaxedProtocols.length > 0) {
+        recommendations.push(
+          `${relaxedProtocols.join(' and ')} alignment ${relaxedProtocols.length > 1 ? 'are' : 'is'} set to ` +
+          'relaxed (the default), which allows a subdomain of your sending/signing domain to still count as ' +
+          'aligned. This is optional hardening, not required — only switch to strict alignment ' +
+          '("adkim=s"/"aspf=s") after confirming your legitimate mail already passes SPF/DKIM from the exact ' +
+          'sending domain, since strict mode will break alignment for mail sent from subdomains.'
+        );
+      }
+    }
   } else {
     recommendations.push(
       'No DMARC record found. Add a TXT record at "_dmarc.yourdomain.com" (e.g. "v=DMARC1; p=none; rua=mailto:you@yourdomain.com") ' +
@@ -385,15 +500,22 @@ app.get('/check', checkLimiter, async (req, res) => {
     return res.json({ domain, type: 'nonexistent' });
   }
 
-  const [spf, dkim, dmarc] = await Promise.all([
+  const [spf, dkim, dmarc, mtaSts, tlsRpt, dnssec, bimi] = await Promise.all([
     checkSpf(domain),
     checkDkim(domain),
-    checkDmarc(domain)
+    checkDmarc(domain),
+    checkMtaSts(domain),
+    checkTlsRpt(domain),
+    checkDnssec(domain),
+    checkBimi(domain)
   ]);
 
   const { score, recommendations } = buildScoreAndAdvice(spf, dkim, dmarc);
 
-  res.json({ domain, type: 'checked', spf, dkim, dmarc, score, recommendations });
+  res.json({
+    domain, type: 'checked', spf, dkim, dmarc, score, recommendations,
+    extras: { mtaSts, tlsRpt, dnssec, bimi }
+  });
 });
 
 // Global error handler — must be the last app.use() call (Express
