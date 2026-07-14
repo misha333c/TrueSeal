@@ -4,12 +4,16 @@
   "description": "Checks a domain's SPF, DKIM, and DMARC records and scores them.",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "jest"
   },
   "dependencies": {
     "express": "^4.22.2",
     "express-rate-limit": "^8.5.2",
     "helmet": "^8.3.0",
     "psl": "^1.15.0"
+  },
+  "devDependencies": {
+    "jest": "^30.4.2"
   }
 }

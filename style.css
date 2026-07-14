@@ -42,6 +42,39 @@ body {
   overflow-x: hidden;
 }
 
+/* Faint ledger/graph-paper grid, sitting behind all content — same hairline
+   technique used by .hero::before / .page-content::before elsewhere in this
+   file, just at a larger cell size and lower opacity so it reads as page
+   texture rather than a drawn grid. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(rgba(27, 27, 35, 0.011) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(27, 27, 35, 0.011) 1px, transparent 1px);
+  background-size: 80px 80px;
+  pointer-events: none;
+}
+
+/* Fine paper-grain overlay, sitting on top of everything (including panels
+   and text) at very low opacity with a multiply blend, so it reads as
+   physical paper grain across the whole page rather than a texture confined
+   to one element. CSS-only noise via feTurbulence, no image asset. */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 150px 150px;
+  opacity: 0.025;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+
 .container {
   background: var(--bg);
   color: var(--ink);
@@ -105,6 +138,67 @@ body {
 #check-button:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+/* Optional add-on below the main input row — visually secondary (small,
+   collapsed by default) since a custom selector is a rarely-needed extra,
+   not part of the primary "enter a domain and check it" flow. */
+
+.selector-toggle {
+  max-width: 480px;
+  margin: 10px auto 0;
+  text-align: left;
+}
+
+.selector-toggle summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--accent);
+  list-style: none;
+  text-align: center;
+}
+
+.selector-toggle summary::-webkit-details-marker {
+  display: none;
+}
+
+.selector-toggle summary::before {
+  content: '▸';
+  display: inline-block;
+  width: 10px;
+  transition: transform 0.15s ease;
+}
+
+.selector-toggle[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.selector-toggle summary:hover {
+  color: var(--accent-hover);
+}
+
+.selector-toggle-content {
+  margin-top: 8px;
+}
+
+#selector-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+#selector-input::placeholder {
+  color: var(--placeholder);
+}
+
+#selector-input:focus {
+  outline: none;
+  border-color: var(--accent);
 }
 
 /* Narrow screens: the checker tool's fixed-px widths (.hero-product-frame
@@ -509,17 +603,45 @@ body {
   margin: 0 0 10px;
 }
 
-.recommendations ul {
-  margin: 0;
-  padding-left: 18px;
+.recommendation-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
-.recommendations li {
+.recommendation {
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: 6px;
+}
+
+.recommendation-row {
+  margin: 0;
   font-size: 13px;
   line-height: 1.5;
+  color: var(--ink);
+}
+
+.recommendation-row + .recommendation-row {
+  margin-top: 4px;
+}
+
+.recommendation-label {
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+.recommendation-allclear {
+  border-left-color: var(--green);
+}
+
+.recommendation-allclear .recommendation-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  font-weight: 600;
   color: var(--ink);
 }
 

@@ -1,9 +1,11 @@
 const button = document.getElementById('check-button');
 const input = document.getElementById('domain-input');
+const selectorInput = document.getElementById('selector-input');
 const result = document.getElementById('result');
 
 button.addEventListener('click', async () => {
   const domain = input.value.trim();
+  const customSelector = selectorInput.value.trim();
 
   if (!domain) {
     showMessage('Please enter a domain.');
@@ -14,7 +16,11 @@ button.addEventListener('click', async () => {
   button.disabled = true;
 
   try {
-    const response = await fetch(`/check?domain=${encodeURIComponent(domain)}`);
+    let url = `/check?domain=${encodeURIComponent(domain)}`;
+    if (customSelector) {
+      url += `&selector=${encodeURIComponent(customSelector)}`;
+    }
+    const response = await fetch(url);
     const data = await response.json();
 
     if (!response.ok) {
@@ -23,22 +29,34 @@ button.addEventListener('click', async () => {
     }
 
     if (data.type === 'subdomain') {
-      showNotice('subdomain', `This looks like a subdomain — email security records are typically set on the root domain. Try checking ${data.rootDomain} instead.`);
+      showNotice('subdomain', `This looks like a subdomain, and email security records are typically set on the root domain. Try checking ${data.rootDomain} instead.`);
       return;
     }
 
     if (data.type === 'nonexistent') {
-      showNotice('nonexistent', "This domain doesn't appear to exist — check the spelling.");
+      showNotice('nonexistent', "This domain doesn't appear to exist. Check the spelling.");
       return;
     }
 
-    renderResult(data);
+    renderResult(data, customSelector);
   } catch (err) {
     showMessage('Could not reach the server. Is it running?');
   } finally {
     button.disabled = false;
   }
 });
+
+// Pressing Enter in either input runs the same check as clicking the button.
+// button.click() is a no-op while button.disabled is true (native disabled
+// buttons don't fire click), so this can't trigger an overlapping request
+// while one is already in flight.
+function submitOnEnter(e) {
+  if (e.key === 'Enter') {
+    button.click();
+  }
+}
+input.addEventListener('keydown', submitOnEnter);
+selectorInput.addEventListener('keydown', submitOnEnter);
 
 function showMessage(text) {
   result.replaceChildren();
@@ -275,7 +293,7 @@ function spfCheckItem(spf) {
   }
   if (spf.status === 'multiple_records') {
     return createCheckItem(
-      'fail', 'SPF', `Multiple SPF records found (${spf.records.length}) — invalid`,
+      'fail', 'SPF', `Multiple SPF records found (${spf.records.length}), invalid`,
       spf.records, spf.tags,
       'RFC 7208 allows only one SPF record per domain. Publishing more than one causes SPF evaluation to ' +
       'return a "permerror", which fails SPF entirely for receiving mail servers.'
@@ -284,7 +302,7 @@ function spfCheckItem(spf) {
   return createCheckItem('fail', 'SPF', 'Not found');
 }
 
-function dkimCheckItem(dkim) {
+function dkimCheckItem(dkim, customSelector) {
   if (dkim.found) {
     let detail = `Found (selector: ${dkim.selector})`;
     let status = 'pass';
@@ -294,7 +312,7 @@ function dkimCheckItem(dkim) {
       detail += `, ${keyStrength.type.toUpperCase()}-${keyStrength.bits}`;
       if (keyStrength.type === 'rsa' && keyStrength.bits < 1024) {
         status = 'warn';
-        note = `This ${keyStrength.bits}-bit RSA key is weak — below the 1024-bit floor generally considered ` +
+        note = `This ${keyStrength.bits}-bit RSA key is weak, below the 1024-bit floor generally considered ` +
           'secure against factoring attacks. It should be rotated to a 2048-bit key.';
       }
     }
@@ -302,17 +320,21 @@ function dkimCheckItem(dkim) {
   }
   if (dkim.status === 'revoked') {
     return createCheckItem(
-      'warn', 'DKIM', `Found, but inactive — empty public key (selector: "${dkim.selector}")`,
+      'warn', 'DKIM', `Found, but inactive, empty public key (selector: "${dkim.selector}")`,
       dkim.record, dkim.tags
     );
   }
-  return createCheckItem(
-    'fail', 'DKIM', 'Not found among common selectors',
-    null, null,
-    "DKIM selectors can't be fully discovered via DNS alone, so this only means no record was found among " +
-    "common selector names — not a guaranteed absence of DKIM. The domain's provider may use a custom " +
-    "selector this check doesn't know about."
-  );
+  const detail = customSelector
+    ? `Not found among common selectors or "${customSelector}"`
+    : 'Not found among common selectors';
+  const note = customSelector
+    ? `DKIM selectors can't be fully discovered via DNS alone, so this means no record was found among ` +
+      `common selector names or the custom selector "${customSelector}" you provided. This isn't a guaranteed ` +
+      "absence of DKIM. Double-check the selector, or the domain's provider may use a different one."
+    : "DKIM selectors can't be fully discovered via DNS alone, so this only means no record was found among " +
+      "common selector names. It isn't a guaranteed absence of DKIM. The domain's provider may use a custom " +
+      "selector this check doesn't know about.";
+  return createCheckItem('fail', 'DKIM', detail, null, null, note);
 }
 
 function dmarcCheckItem(dmarc) {
@@ -321,7 +343,7 @@ function dmarcCheckItem(dmarc) {
   }
   const detail = `Found (policy: ${dmarc.policy || 'none specified'})`;
   const status = dmarc.policy === 'reject' ? 'pass' : 'warn';
-  const note = `Alignment — SPF: ${dmarc.alignment.spf}, DKIM: ${dmarc.alignment.dkim}. Relaxed (the default) ` +
+  const note = `Alignment (SPF: ${dmarc.alignment.spf}, DKIM: ${dmarc.alignment.dkim}). Relaxed (the default) ` +
     'allows a subdomain match; strict requires the exact sending/signing domain to match.';
   return createCheckItem(status, 'DMARC', detail, dmarc.record, dmarc.tags, note);
 }
@@ -348,7 +370,7 @@ function createExtrasSection(extras) {
 
   const subtitle = document.createElement('p');
   subtitle.className = 'extras-subtitle';
-  subtitle.textContent = "Not part of the score above — these are newer or less common protocols, so their absence isn't a misconfiguration.";
+  subtitle.textContent = "Not part of the score above. These are newer or less common protocols, so their absence isn't a misconfiguration.";
   section.appendChild(subtitle);
 
   const grid = document.createElement('div');
@@ -374,7 +396,45 @@ function createExtrasSection(extras) {
   return section;
 }
 
-function renderResult(data) {
+// Builds a single recommendation block. rec is { issue, fix }: fix is null
+// for the "all clear" case, which renders as a single confirmation line
+// instead of an issue/fix pair.
+function createRecommendationItem(rec) {
+  const item = document.createElement('div');
+
+  if (rec.fix === null) {
+    item.className = 'recommendation recommendation-allclear';
+    const text = document.createElement('p');
+    text.className = 'recommendation-text';
+    text.textContent = rec.issue;
+    item.appendChild(text);
+    return item;
+  }
+
+  item.className = 'recommendation';
+
+  const issueRow = document.createElement('p');
+  issueRow.className = 'recommendation-row';
+  const issueLabel = document.createElement('span');
+  issueLabel.className = 'recommendation-label';
+  issueLabel.textContent = "What's going on: ";
+  issueRow.appendChild(issueLabel);
+  issueRow.appendChild(document.createTextNode(rec.issue));
+  item.appendChild(issueRow);
+
+  const fixRow = document.createElement('p');
+  fixRow.className = 'recommendation-row';
+  const fixLabel = document.createElement('span');
+  fixLabel.className = 'recommendation-label';
+  fixLabel.textContent = 'What to do: ';
+  fixRow.appendChild(fixLabel);
+  fixRow.appendChild(document.createTextNode(rec.fix));
+  item.appendChild(fixRow);
+
+  return item;
+}
+
+function renderResult(data, customSelector) {
   result.replaceChildren();
 
   const grid = document.createElement('div');
@@ -387,7 +447,7 @@ function renderResult(data) {
 
   const dkimCol = document.createElement('div');
   dkimCol.className = 'result-col';
-  dkimCol.appendChild(dkimCheckItem(data.dkim));
+  dkimCol.appendChild(dkimCheckItem(data.dkim, customSelector));
 
   const dmarcSpfCol = document.createElement('div');
   dmarcSpfCol.className = 'result-col';
@@ -402,11 +462,10 @@ function renderResult(data) {
   recommendations.className = 'recommendations';
   const heading = document.createElement('h3');
   heading.textContent = 'Recommendations';
-  const list = document.createElement('ul');
+  const list = document.createElement('div');
+  list.className = 'recommendation-list';
   data.recommendations.forEach(rec => {
-    const li = document.createElement('li');
-    li.textContent = rec;
-    list.appendChild(li);
+    list.appendChild(createRecommendationItem(rec));
   });
   recommendations.appendChild(heading);
   recommendations.appendChild(list);
