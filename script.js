@@ -3,9 +3,14 @@ const input = document.getElementById('domain-input');
 const selectorInput = document.getElementById('selector-input');
 const result = document.getElementById('result');
 
-button.addEventListener('click', async () => {
-  const domain = input.value.trim();
-  const customSelector = selectorInput.value.trim();
+let currentDomain = null;
+let starButton = null;
+
+async function runCheck(domainArg, selectorArg) {
+  const domain = (domainArg !== undefined ? domainArg : input.value).trim();
+  const customSelector = (selectorArg !== undefined ? selectorArg : selectorInput.value).trim();
+  input.value = domain;
+  if (selectorArg !== undefined) selectorInput.value = customSelector;
 
   if (!domain) {
     showMessage('Please enter a domain.', true);
@@ -39,12 +44,15 @@ button.addEventListener('click', async () => {
     }
 
     renderResult(data, customSelector);
+    handlePostCheck(data);
   } catch (err) {
     showMessage("Couldn't connect to the checker. Check your connection and try again.", true);
   } finally {
     button.disabled = false;
   }
-});
+}
+
+button.addEventListener('click', () => runCheck());
 
 // Pressing Enter in either input runs the same check as clicking the button.
 // button.click() is a no-op while button.disabled is true (native disabled
@@ -454,8 +462,130 @@ function createRecommendationItem(rec) {
   return item;
 }
 
+// Star icon path (Material "star" glyph, 24x24 viewBox). Fill/outline is
+// toggled purely with CSS (.star-button.starred), not by swapping paths.
+const STAR_PATH = 'M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z';
+
+function createResultHeader(domain) {
+  currentDomain = domain;
+
+  const header = document.createElement('div');
+  header.className = 'result-header';
+
+  const heading = document.createElement('h2');
+  heading.className = 'result-domain';
+  heading.textContent = domain;
+  header.appendChild(heading);
+
+  starButton = document.createElement('button');
+  starButton.type = 'button';
+  starButton.className = 'star-button';
+  starButton.hidden = true;
+  starButton.setAttribute('aria-pressed', 'false');
+  starButton.setAttribute('aria-label', `Star ${domain}`);
+
+  const svgNs = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNs, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('width', '22');
+  svg.setAttribute('height', '22');
+  svg.setAttribute('aria-hidden', 'true');
+  const path = document.createElementNS(svgNs, 'path');
+  path.setAttribute('d', STAR_PATH);
+  svg.appendChild(path);
+  starButton.appendChild(svg);
+
+  starButton.addEventListener('click', () => toggleStar(domain));
+  header.appendChild(starButton);
+
+  return header;
+}
+
+function setStarState(starred) {
+  if (!starButton) return;
+  starButton.classList.toggle('starred', starred);
+  starButton.setAttribute('aria-pressed', String(starred));
+  starButton.setAttribute('aria-label', starred ? `Unstar ${currentDomain}` : `Star ${currentDomain}`);
+}
+
+// Fire-and-forget: save to check_history and check starred status when
+// logged in. Neither should block or slow down the result already on
+// screen, and neither should surface an error to the user on failure —
+// this is a best-effort convenience feature, not core functionality.
+async function handlePostCheck(data) {
+  if (!window.trueSealAuth) return;
+  await window.trueSealAuth.ready;
+  const user = window.trueSealAuth.getUser();
+
+  if (!user) {
+    if (starButton) starButton.hidden = true;
+    return;
+  }
+
+  saveCheckHistory(user, data.domain, data.score);
+  refreshStarState(user, data.domain);
+}
+
+async function saveCheckHistory(user, domain, score) {
+  try {
+    const client = await window.trueSealAuth.getClient();
+    await client.from('check_history').insert({ user_id: user.id, domain, score });
+  } catch (err) {
+    // best-effort only
+  }
+}
+
+async function refreshStarState(user, domain) {
+  if (!starButton) return;
+  starButton.hidden = false;
+  starButton.disabled = true;
+  try {
+    const client = await window.trueSealAuth.getClient();
+    const { data } = await client
+      .from('starred_domains')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('domain', domain)
+      .maybeSingle();
+    setStarState(!!data);
+  } catch (err) {
+    setStarState(false);
+  } finally {
+    starButton.disabled = false;
+  }
+}
+
+async function toggleStar(domain) {
+  if (!window.trueSealAuth || !starButton) return;
+  const user = window.trueSealAuth.getUser();
+  if (!user) return;
+
+  starButton.disabled = true;
+  const wasStarred = starButton.classList.contains('starred');
+  try {
+    const client = await window.trueSealAuth.getClient();
+    if (wasStarred) {
+      await client.from('starred_domains').delete().eq('user_id', user.id).eq('domain', domain);
+      setStarState(false);
+    } else {
+      const { error } = await client.from('starred_domains').insert({ user_id: user.id, domain });
+      // 23505 = unique_violation — e.g. a double-click racing two inserts.
+      // The desired end state (a row exists) is already true, so treat it
+      // the same as success rather than surfacing an error.
+      if (error && error.code !== '23505') throw error;
+      setStarState(true);
+    }
+  } catch (err) {
+    // leave star state unchanged on failure
+  } finally {
+    starButton.disabled = false;
+  }
+}
+
 function renderResult(data, customSelector) {
   result.replaceChildren();
+
+  result.appendChild(createResultHeader(data.domain));
 
   const grid = document.createElement('div');
   grid.className = 'result-grid';
@@ -494,3 +624,29 @@ function renderResult(data, customSelector) {
   result.appendChild(recommendations);
   result.appendChild(createExtrasSection(data.extras));
 }
+
+// Lets the History modal (on this or another page) trigger a re-check and
+// keep the on-page star icon in sync after an unstar action there.
+window.trueSealChecker = {
+  runCheck,
+  syncStarButton: () => {
+    if (!window.trueSealAuth || !currentDomain) return;
+    window.trueSealAuth.ready.then(() => {
+      const user = window.trueSealAuth.getUser();
+      if (user) refreshStarState(user, currentDomain);
+    });
+  }
+};
+
+// Arriving from the History modal's "click to re-check" on another page
+// (index.html?domain=example.com) auto-runs the check once, then cleans the
+// URL so a refresh doesn't re-trigger it.
+(function autoCheckFromQueryParam() {
+  const params = new URLSearchParams(window.location.search);
+  const domainParam = params.get('domain');
+  if (!domainParam) return;
+  runCheck(domainParam, '');
+  const url = new URL(window.location.href);
+  url.searchParams.delete('domain');
+  window.history.replaceState({}, '', url);
+})();

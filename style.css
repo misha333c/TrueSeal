@@ -343,6 +343,63 @@ body::before {
   color: var(--red);
 }
 
+/* Domain heading + star toggle, sitting above the result grid. The star
+   button is hidden by default and only revealed once a logged-in user's
+   starred status for the domain has been checked (script.js), so it never
+   flashes into view for a logged-out visitor. */
+
+.result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.result-domain {
+  font-family: var(--font-serif);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0;
+  word-break: break-word;
+}
+
+.star-button {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--gold);
+  cursor: pointer;
+}
+
+.star-button svg path {
+  fill: none;
+  stroke: var(--gold);
+  stroke-width: 1.5;
+}
+
+.star-button:hover svg path {
+  stroke: var(--gold-hover);
+}
+
+.star-button.starred svg path {
+  fill: var(--gold);
+  stroke: var(--gold);
+}
+
+.star-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 /* Main result layout: column 1 is the score ring + explainer, column 2 is
    DKIM, column 3 stacks DMARC above SPF. align-items: stretch makes every
    column match the row's height (set by DKIM, the longest column), so
@@ -831,6 +888,308 @@ body::before {
 
 .nav-signup:hover {
   background: var(--seal-hover);
+}
+
+.nav-user-email {
+  color: var(--ink-muted);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.nav-logout {
+  color: var(--ink-muted);
+  text-decoration: none;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.nav-logout:hover {
+  color: var(--seal);
+}
+
+.nav-history {
+  color: var(--ink-muted);
+  text-decoration: none;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.nav-history:hover {
+  color: var(--seal);
+}
+
+/* Auth modal — overlay + centered card, injected into the DOM by auth.js
+   so the markup lives in one place instead of being duplicated on every
+   page. Reuses the same parchment/gold/burgundy language as the rest of
+   the site (card-bg, gold border, seal-colored primary action). */
+
+.auth-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(27, 27, 35, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 1000;
+}
+
+.auth-modal-overlay[hidden] {
+  display: none;
+}
+
+.auth-modal {
+  position: relative;
+  width: 100%;
+  max-width: 380px;
+  background: var(--paper);
+  border: 1px solid var(--gold);
+  border-radius: 10px;
+  box-shadow: 0 20px 50px -20px rgba(27, 27, 35, 0.5);
+  padding: var(--space-lg);
+  box-sizing: border-box;
+}
+
+.auth-modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: none;
+  color: var(--ink-muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.auth-modal-close:hover {
+  color: var(--seal);
+}
+
+.auth-form-title {
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0 0 16px;
+}
+
+.auth-form[hidden] {
+  display: none;
+}
+
+.auth-form-error {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  background: rgba(122, 39, 49, 0.07);
+  border: 1px solid rgba(122, 39, 49, 0.2);
+  border-left: 3px solid var(--seal);
+  border-radius: 6px;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.auth-form-error[hidden] {
+  display: none;
+}
+
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.auth-field input {
+  padding: 8px 10px;
+  font-size: 15px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--card-bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+}
+
+.auth-field input:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+
+.auth-submit {
+  width: 100%;
+  padding: 10px 16px;
+  font-size: 15px;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  background: var(--seal);
+  color: white;
+  cursor: pointer;
+}
+
+.auth-submit:hover {
+  background: var(--seal-hover);
+}
+
+.auth-submit:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.auth-switch {
+  margin: 14px 0 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.auth-switch-link {
+  color: var(--gold);
+  text-decoration: none;
+}
+
+.auth-switch-link:hover {
+  color: var(--gold-hover);
+  text-decoration: underline;
+}
+
+/* History modal — same overlay/card language as the auth modal, just wider
+   and with a tabbed list layout instead of a form. */
+
+.history-modal {
+  max-width: 460px;
+}
+
+.history-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--grid);
+}
+
+.history-tab {
+  padding: 8px 6px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--ink-muted);
+  font-size: 14px;
+  font-family: var(--font-body);
+  cursor: pointer;
+}
+
+.history-tab.active {
+  color: var(--seal);
+  border-bottom-color: var(--seal);
+  font-weight: 600;
+}
+
+.history-tab-panel[hidden] {
+  display: none;
+}
+
+.history-tab-panel {
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+.history-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--grid);
+}
+
+.history-row:last-child {
+  border-bottom: none;
+}
+
+.history-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.history-row-clickable {
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 4px;
+  margin: -4px;
+}
+
+.history-row-clickable:hover,
+.history-row-clickable:focus-visible {
+  background: var(--card-bg-subtle);
+  outline: none;
+}
+
+.history-domain {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-meta {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.history-score {
+  flex-shrink: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.history-score.score-good {
+  color: var(--green);
+}
+
+.history-score.score-medium {
+  color: var(--amber);
+}
+
+.history-score.score-poor {
+  color: var(--red);
+}
+
+.history-unstar {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--ink-muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.history-unstar:hover {
+  color: var(--seal);
+  background: rgba(122, 39, 49, 0.08);
+}
+
+.history-unstar:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.history-empty {
+  margin: 20px 0;
+  text-align: center;
+  color: var(--ink-muted);
+  font-size: 13px;
 }
 
 @media (max-width: 700px) {

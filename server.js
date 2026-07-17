@@ -3,15 +3,46 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const lib = require('./lib');
 
+// Loads SUPABASE_URL/SUPABASE_ANON_KEY from .env into process.env. Silently
+// ignored if the file doesn't exist (e.g. production envs that inject vars
+// directly) so this never crashes startup.
+try {
+  process.loadEnvFile();
+} catch (err) {
+  if (err.code !== 'ENOENT') throw err;
+}
+
 const app = express();
 const PORT = 3000;
 
 // Sets standard HTTP security headers (CSP, X-Frame-Options, etc.) using
-// helmet's defaults.
-app.use(helmet());
+// helmet's defaults, widened just enough to allow the Supabase JS client:
+// script-src for the unpkg CDN build, connect-src for the browser's direct
+// calls to the Supabase project's auth API.
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+      'script-src': ["'self'", 'https://unpkg.com'],
+      'connect-src': ["'self'", 'https://*.supabase.co', 'wss://*.supabase.co']
+    }
+  }
+}));
 
 // Serve index.html, style.css, script.js from this same folder
 app.use(express.static(__dirname));
+
+// Hands the frontend the Supabase project URL and anon (public) key, read
+// server-side from .env, so they don't need to be hardcoded into a static
+// JS file. The anon key is safe to expose to the browser by design — it's
+// what Supabase's client-side SDK is meant to use — but this still keeps
+// it out of committed source in case the deployment setup changes later.
+app.get('/config', (req, res) => {
+  res.json({
+    supabaseUrl: process.env.SUPABASE_URL || '',
+    supabaseAnonKey: process.env.SUPABASE_ANON_KEY || ''
+  });
+});
 
 // Each /check request can trigger multiple real DNS lookups (SPF recursion,
 // DKIM selector probing, etc.), so this endpoint specifically is rate
