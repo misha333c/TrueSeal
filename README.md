@@ -28,8 +28,8 @@ Unlike most free checkers, which either dump raw technical output or oversimplif
 
 ## Running it locally
 
-git clone https://github.com/misha333c/EMAIL_DOMAIN_CHECKER.git
-cd EMAIL_DOMAIN_CHECKER
+git clone https://github.com/misha333c/TrueSeal.git
+cd TrueSeal
 npm install
 npm start
 
