@@ -1306,6 +1306,24 @@ body::before {
   gap: 10px;
 }
 
+.footer-legal {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  padding: 0 28px 10px;
+}
+
+.footer-legal a {
+  color: var(--ink-muted);
+  text-decoration: none;
+  font-family: var(--font-body);
+  font-size: 11px;
+}
+
+.footer-legal a:hover {
+  color: var(--seal);
+}
+
 .footer-copyright {
   margin: 0;
   padding: 0 28px var(--space-md);
