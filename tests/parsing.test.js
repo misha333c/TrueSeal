@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { parseRecordTags, isValidDomainFormat, getDkimKeyStrength } = require('../lib');
+const { parseRecordTags, isValidDomainFormat, getDkimKeyStrength, toAsciiDomain } = require('../lib');
 
 describe('parseRecordTags', () => {
   test('parses a semicolon-delimited DMARC-style record', () => {
@@ -62,6 +62,61 @@ describe('isValidDomainFormat', () => {
     expect(longDomain.length).toBeGreaterThan(253);
     expect(isValidDomainFormat(longDomain)).toBe(false);
   });
+
+  // Boundary check: exactly 253 chars (the RFC 1035 presentation-format
+  // limit) must pass, and 254 must fail — using labels that are themselves
+  // valid (<=63 chars each) so only the total-length boundary is under
+  // test, not an incidental label-length violation.
+  describe('253/254-character boundary', () => {
+    const makeDomain = (lastLabelLen) =>
+      ['a'.repeat(63), 'a'.repeat(63), 'a'.repeat(63), 'a'.repeat(lastLabelLen)].join('.');
+
+    test('exactly 253 characters is valid', () => {
+      const domain = makeDomain(61);
+      expect(domain.length).toBe(253);
+      expect(isValidDomainFormat(domain)).toBe(true);
+    });
+
+    test('exactly 254 characters is invalid', () => {
+      const domain = makeDomain(62);
+      expect(domain.length).toBe(254);
+      expect(isValidDomainFormat(domain)).toBe(false);
+    });
+  });
+
+  test('a raw Unicode IDN domain is rejected by format validation directly (must go through toAsciiDomain first)', () => {
+    expect(isValidDomainFormat('münchen.de')).toBe(false);
+  });
+
+  test('an already-punycode IDN domain is valid', () => {
+    expect(isValidDomainFormat('xn--mnchen-3ya.de')).toBe(true);
+  });
+});
+
+describe('toAsciiDomain', () => {
+  test('converts a raw Unicode IDN domain to its punycode form', () => {
+    expect(toAsciiDomain('münchen.de')).toBe('xn--mnchen-3ya.de');
+  });
+
+  test('a domain already in punycode form passes through unchanged', () => {
+    expect(toAsciiDomain('xn--mnchen-3ya.de')).toBe('xn--mnchen-3ya.de');
+  });
+
+  test('a plain ASCII domain passes through unchanged', () => {
+    expect(toAsciiDomain('example.com')).toBe('example.com');
+  });
+
+  test('a non-Latin-script IDN domain converts correctly', () => {
+    expect(toAsciiDomain('日本語.jp')).toBe('xn--wgv71a119e.jp');
+  });
+
+  test('the converted form of an IDN domain passes isValidDomainFormat', () => {
+    expect(isValidDomainFormat(toAsciiDomain('münchen.de'))).toBe(true);
+  });
+
+  test('invalid input (e.g. containing spaces) converts to an empty string', () => {
+    expect(toAsciiDomain('not a domain')).toBe('');
+  });
 });
 
 describe('getDkimKeyStrength', () => {
@@ -83,7 +138,12 @@ describe('getDkimKeyStrength', () => {
     expect(result.bits).toBeNull();
   });
 
-  test('empty string input with no key type tag returns a fully null result', () => {
-    expect(getDkimKeyStrength('', undefined)).toEqual({ type: null, bits: null });
+  test('garbage/invalid base64 is flagged with parseError: true, distinct from a merely-uncommon key type', () => {
+    const result = getDkimKeyStrength('!!!not-valid-base64-key-data!!!', 'rsa');
+    expect(result.parseError).toBe(true);
+  });
+
+  test('empty string input with no key type tag returns a fully null result flagged as a parse error', () => {
+    expect(getDkimKeyStrength('', undefined)).toEqual({ type: null, bits: null, parseError: true });
   });
 });

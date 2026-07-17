@@ -1,6 +1,7 @@
 const dns = require('dns').promises;
 const psl = require('psl');
 const crypto = require('crypto');
+const { domainToASCII } = require('url');
 
 // Common DKIM selectors used by popular email providers.
 // There's no DNS way to discover a domain's selector, so we just try the
@@ -17,6 +18,18 @@ const DOMAIN_REGEX = /^(?!-)[a-zA-Z0-9-]{1,63}(?<!-)(\.(?!-)[a-zA-Z0-9-]{1,63}(?
 
 function isValidDomainFormat(domain) {
   return domain.length <= 253 && DOMAIN_REGEX.test(domain);
+}
+
+// Converts an internationalized domain (e.g. "münchen.de") to its ASCII/
+// punycode form (e.g. "xn--mnchen-3ya.de") so IDN input validates against
+// DOMAIN_REGEX and resolves correctly — Node's dns module, like the wire
+// protocol itself, only understands ASCII labels. Already-ASCII input
+// (including domains that are already in punycode form) passes through
+// unchanged. Invalid input (stray whitespace, disallowed characters) comes
+// back as '' per the WHATWG URL spec, which correctly falls through to the
+// standard "Invalid domain format" error rather than needing special-casing.
+function toAsciiDomain(domain) {
+  return domainToASCII(domain);
 }
 
 // Pulls every "key=value" tag out of a raw record (works for both the
@@ -56,7 +69,12 @@ function getDkimKeyStrength(publicKeyBase64, keyTypeTag) {
     }
     return { type: keyObject.asymmetricKeyType, bits: null };
   } catch (err) {
-    return { type: keyTypeTag || null, bits: null };
+    // The key data itself couldn't be parsed (invalid base64/DER), as
+    // opposed to a recognized-but-uncommon key type (handled above, which
+    // also leaves bits: null but isn't a parse failure). Callers use this
+    // flag to surface "found, but couldn't be parsed" instead of silently
+    // showing the same result as a normal, healthy key.
+    return { type: keyTypeTag || null, bits: null, parseError: true };
   }
 }
 
@@ -68,16 +86,32 @@ function findRootDomain(domain) {
   return parsed.domain;
 }
 
+// Error codes that mean the DNS query itself couldn't get a reliable answer
+// (resolver unreachable, timed out, refused, etc.) as opposed to a definitive
+// "this name doesn't exist" (ENOTFOUND) or "name exists, just no data of this
+// type" (ENODATA) response. Distinguishing these matters because a transient
+// resolver failure isn't proof the domain doesn't exist — reporting it as
+// such would be a false negative dressed up as a normal result.
+const DNS_TRANSIENT_ERROR_CODES = new Set([
+  'ETIMEOUT', 'ECONNREFUSED', 'ESERVFAIL', 'EREFUSED', 'EBADRESP',
+  'ECANCELLED', 'ECONNRESET', 'ENETUNREACH', 'EHOSTUNREACH'
+]);
+
 // A domain "exists" in DNS if the parent zone delegates it via NS records.
-// ENOTFOUND means the name itself isn't registered/delegated (NXDOMAIN);
-// any other outcome (including ENODATA, which means the name exists but
-// has no NS records) is treated as "exists" so we don't report false negatives.
-async function domainExists(domain) {
+// Returns 'nonexistent' only for a definitive NXDOMAIN (ENOTFOUND); a
+// transient resolver failure (timeout, refused, unreachable, etc.) returns
+// 'error' instead of being silently folded into either "exists" or
+// "doesn't exist". Any other outcome (including ENODATA, which means the
+// name exists but has no NS records) is treated as 'exists' so we don't
+// report false negatives.
+async function checkDomainStatus(domain) {
   try {
     await dns.resolveNs(domain);
-    return true;
+    return 'exists';
   } catch (err) {
-    return err.code !== 'ENOTFOUND';
+    if (err.code === 'ENOTFOUND') return 'nonexistent';
+    if (DNS_TRANSIENT_ERROR_CODES.has(err.code)) return 'error';
+    return 'exists';
   }
 }
 
@@ -313,17 +347,22 @@ async function checkBimi(domain) {
 
 // Node's built-in dns module doesn't support 'DNSKEY' as a queryable rrtype,
 // so DNSSEC presence is checked via Google's DNS-over-HTTPS JSON API instead.
+// Unlike the other checks, this depends on an external HTTP service rather
+// than a direct DNS query, so a failure here (network issue, DoH outage,
+// timeout) is distinguished from a genuine "not signed" result via
+// checkFailed, rather than both silently collapsing to found: false.
 async function checkDnssec(domain) {
+  let data;
   try {
     const res = await fetch(`https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=DNSKEY`, {
       signal: AbortSignal.timeout(5000)
     });
-    const data = await res.json();
-    const found = data.Status === 0 && Array.isArray(data.Answer) && data.Answer.some(r => r.type === 48);
-    return { found };
+    data = await res.json();
   } catch (err) {
-    return { found: false };
+    return { found: false, checkFailed: true };
   }
+  const found = data.Status === 0 && Array.isArray(data.Answer) && data.Answer.some(r => r.type === 48);
+  return { found };
 }
 
 function buildScoreAndAdvice(spf, dkim, dmarc) {
@@ -361,7 +400,19 @@ function buildScoreAndAdvice(spf, dkim, dmarc) {
 
   if (dkim.found) {
     const keyStrength = dkim.keyStrength || {};
-    if (keyStrength.type === 'rsa' && keyStrength.bits < 1024) {
+    if (keyStrength.parseError) {
+      // A record and public key were found, but the key data itself couldn't
+      // be parsed — checked first so this doesn't fall into the "< 1024"
+      // branch below (keyStrength.bits is null there, and null < 1024 is
+      // true in JS, which would misreport an unparseable key as "weak").
+      score += 15;
+      recommendations.push({
+        issue: `A DKIM record and public key were found (selector "${dkim.selector}"), but the key data ` +
+          "couldn't be parsed to verify its type or strength — it may be malformed, truncated, or use a " +
+          "format this check doesn't recognize.",
+        fix: "Double-check the record was copied correctly from your email provider's DKIM setup instructions, and republish it if needed."
+      });
+    } else if (keyStrength.type === 'rsa' && keyStrength.bits < 1024) {
       score += 15;
       recommendations.push({
         issue: `Your DKIM key (selector "${dkim.selector}") is only ${keyStrength.bits}-bit RSA, which is ` +
@@ -457,9 +508,10 @@ function buildScoreAndAdvice(spf, dkim, dmarc) {
 
 module.exports = {
   isValidDomainFormat,
+  toAsciiDomain,
   parseRecordTags,
   findRootDomain,
-  domainExists,
+  checkDomainStatus,
   countSpfLookups,
   checkSpf,
   checkDmarc,

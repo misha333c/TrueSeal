@@ -8,7 +8,7 @@ button.addEventListener('click', async () => {
   const customSelector = selectorInput.value.trim();
 
   if (!domain) {
-    showMessage('Please enter a domain.');
+    showMessage('Please enter a domain.', true);
     return;
   }
 
@@ -24,7 +24,7 @@ button.addEventListener('click', async () => {
     const data = await response.json();
 
     if (!response.ok) {
-      showMessage(data.error || 'Something went wrong.');
+      showMessage(data.error || 'Something went wrong on our end. Please try again.', true);
       return;
     }
 
@@ -40,7 +40,7 @@ button.addEventListener('click', async () => {
 
     renderResult(data, customSelector);
   } catch (err) {
-    showMessage('Could not reach the server. Is it running?');
+    showMessage("Couldn't connect to the checker. Check your connection and try again.", true);
   } finally {
     button.disabled = false;
   }
@@ -58,10 +58,10 @@ function submitOnEnter(e) {
 input.addEventListener('keydown', submitOnEnter);
 selectorInput.addEventListener('keydown', submitOnEnter);
 
-function showMessage(text) {
+function showMessage(text, isError = false) {
   result.replaceChildren();
   const p = document.createElement('p');
-  p.className = 'result-message';
+  p.className = isError ? 'result-message result-message-error' : 'result-message';
   p.textContent = text;
   result.appendChild(p);
 }
@@ -100,8 +100,8 @@ function scoreClass(score) {
 // inside the viewBox edge so the stroke never clips.
 function createScoreRing(score) {
   const cls = scoreClass(score);
-  const size = 170;
-  const strokeWidth = 14;
+  const size = 150;
+  const strokeWidth = 12;
   const radius = size / 2 - strokeWidth;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference * (1 - score / 100);
@@ -308,7 +308,17 @@ function dkimCheckItem(dkim, customSelector) {
     let status = 'pass';
     let note = null;
     const keyStrength = dkim.keyStrength;
-    if (keyStrength && keyStrength.type && keyStrength.bits) {
+    if (keyStrength && keyStrength.parseError) {
+      // A record and public key exist, but the key data itself couldn't be
+      // parsed — surfaced distinctly so it doesn't silently look identical
+      // to a normal, healthy key (which would otherwise happen here, since
+      // both leave keyStrength.bits falsy).
+      status = 'warn';
+      detail += ", found a key but couldn't parse it";
+      note = "A public key was found for this selector, but it couldn't be parsed to determine its type or " +
+        'strength — it may be malformed, truncated, or use a format this check doesn\'t recognize. ' +
+        "Double-check the record was copied correctly from your provider's DKIM setup instructions.";
+    } else if (keyStrength && keyStrength.type && keyStrength.bits) {
       detail += `, ${keyStrength.type.toUpperCase()}-${keyStrength.bits}`;
       if (keyStrength.type === 'rsa' && keyStrength.bits < 1024) {
         status = 'warn';
@@ -351,8 +361,18 @@ function dmarcCheckItem(dmarc) {
 // Builds a single informational item for the "Additional signals" grid.
 // Status is 'pass' when found, 'info' (never 'fail') when not — most
 // domains haven't adopted these protocols yet, so absence isn't a
-// misconfiguration worth flagging as a failure.
+// misconfiguration worth flagging as a failure. checkFailed (currently only
+// set by DNSSEC, which depends on an external DNS-over-HTTPS service rather
+// than a direct DNS query) is surfaced as "couldn't verify" instead of
+// silently looking identical to a genuine "not found".
 function extraCheckItem(label, data, description) {
+  if (data.checkFailed) {
+    return createCheckItem(
+      'info', label, "Couldn't verify", null, null,
+      `${description} This check relies on an external DNS-over-HTTPS lookup, which didn't respond — that's ` +
+      "likely a temporary issue and not necessarily related to this domain. Try again in a moment."
+    );
+  }
   const status = data.found ? 'pass' : 'info';
   const detail = data.found ? 'Found' : 'Not found';
   return createCheckItem(status, label, detail, data.record || null, null, description);

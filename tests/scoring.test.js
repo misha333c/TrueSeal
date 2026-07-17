@@ -94,6 +94,18 @@ describe('buildScoreAndAdvice — DKIM', () => {
     expect(rec.fix).toContain('Worth upgrading to a 2048-bit key');
   });
 
+  test('found with a parseError keyStrength awards partial (15) points and flags it as unparseable, not weak', () => {
+    const { score, recommendations } = buildScoreAndAdvice(
+      spfNotFound(), dkimFound({ type: 'rsa', bits: null, parseError: true }), dmarcNotFound()
+    );
+    expect(score).toBe(15);
+    const rec = recommendations.find(r => r.issue.includes("couldn't be parsed"));
+    expect(rec).toBeDefined();
+    // Must not be misreported as a weak/short key (bits: null coerces to 0,
+    // so the plain "bits < 1024" check would otherwise wrongly match this).
+    expect(mentions(recommendations, 'bit RSA')).toBe(false);
+  });
+
   test('revoked scores 0 and includes a revoked-key recommendation', () => {
     const { score, recommendations } = buildScoreAndAdvice(spfNotFound(), dkimRevoked(), dmarcNotFound());
     expect(score).toBe(0);

@@ -1,5 +1,5 @@
 {
-  "name": "email-domain-checker",
+  "name": "trueseal",
   "version": "1.0.0",
   "description": "Checks a domain's SPF, DKIM, and DMARC records and scores them.",
   "main": "server.js",
@@ -14,6 +14,7 @@
     "psl": "^1.15.0"
   },
   "devDependencies": {
-    "jest": "^30.4.2"
+    "jest": "^30.4.2",
+    "supertest": "^7.2.2"
   }
 }

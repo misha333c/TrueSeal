@@ -1,8 +1,8 @@
-# Email Domain Checker
+# TrueSeal
 
 A tool that checks a domain's SPF, DKIM, and DMARC records, scores its email security, and explains the results in plain language, not just raw DNS output.
 
-![Screenshot of Email Domain Checker showing results for google.com](docs/homepage.png)
+![Screenshot of TrueSeal showing results for google.com](docs/homepage.png)
 
 ## What it does
 
