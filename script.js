@@ -480,7 +480,6 @@ function createResultHeader(domain) {
   starButton = document.createElement('button');
   starButton.type = 'button';
   starButton.className = 'star-button';
-  starButton.hidden = true;
   starButton.setAttribute('aria-pressed', 'false');
   starButton.setAttribute('aria-label', `Star ${domain}`);
 
@@ -517,10 +516,10 @@ async function handlePostCheck(data) {
   await window.trueSealAuth.ready;
   const user = window.trueSealAuth.getUser();
 
-  if (!user) {
-    if (starButton) starButton.hidden = true;
-    return;
-  }
+  // Star button is always visible (clicking it while logged out prompts
+  // login, see toggleStar) — only the star/save-to-history side effects
+  // require a logged-in user.
+  if (!user) return;
 
   saveCheckHistory(user, data.domain, data.score);
   refreshStarState(user, data.domain);
@@ -537,7 +536,6 @@ async function saveCheckHistory(user, domain, score) {
 
 async function refreshStarState(user, domain) {
   if (!starButton) return;
-  starButton.hidden = false;
   starButton.disabled = true;
   try {
     const client = await window.trueSealAuth.getClient();
@@ -558,7 +556,10 @@ async function refreshStarState(user, domain) {
 async function toggleStar(domain) {
   if (!window.trueSealAuth || !starButton) return;
   const user = window.trueSealAuth.getUser();
-  if (!user) return;
+  if (!user) {
+    window.trueSealAuth.openModal('login', 'Log in to save starred domains.');
+    return;
+  }
 
   starButton.disabled = true;
   const wasStarred = starButton.classList.contains('starred');

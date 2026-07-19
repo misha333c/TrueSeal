@@ -8,6 +8,7 @@
   const MODAL_HTML = `
     <div class="auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title-login">
       <button type="button" class="auth-modal-close" aria-label="Close">&times;</button>
+      <p class="auth-modal-context" id="auth-modal-context" hidden></p>
 
       <form class="auth-form" id="auth-form-login" data-mode="login" novalidate>
         <h2 class="auth-form-title" id="auth-modal-title-login">Log in</h2>
@@ -54,14 +55,25 @@
   const signupForm = document.getElementById('auth-form-signup');
   const loginError = document.getElementById('auth-error-login');
   const signupError = document.getElementById('auth-error-signup');
+  const contextMessage = document.getElementById('auth-modal-context');
   const navAuth = document.querySelector('.site-nav-auth');
 
   let lastFocused = null;
 
-  function openModal(mode) {
+  // contextMessage optionally replaces the generic modal with a reason it
+  // was opened (e.g. "Log in to save starred domains"), for callers other
+  // than the plain nav Log in/Sign up links.
+  function openModal(mode, contextText) {
     lastFocused = document.activeElement;
     overlay.hidden = false;
     document.body.style.overflow = 'hidden';
+    if (contextText) {
+      contextMessage.textContent = contextText;
+      contextMessage.hidden = false;
+    } else {
+      contextMessage.hidden = true;
+      contextMessage.textContent = '';
+    }
     showForm(mode);
   }
 
@@ -208,8 +220,38 @@
     navAuth.append(loginLink, signupLink);
   }
 
+  function closeUserMenu() {
+    const dropdown = navAuth.querySelector('.nav-user-dropdown');
+    const avatarBtn = navAuth.querySelector('.nav-user-avatar');
+    if (dropdown) dropdown.hidden = true;
+    if (avatarBtn) avatarBtn.setAttribute('aria-expanded', 'false');
+  }
+
+  // Logged-in nav is a single avatar badge (first letter of the email) that
+  // opens a dropdown with the full email, History, and Log out — replaces
+  // three separate text items that used to crowd the nav, especially on
+  // mobile where they collided with the logo.
   function renderLoggedIn(email) {
     navAuth.replaceChildren();
+
+    const menu = document.createElement('div');
+    menu.className = 'nav-user-menu';
+
+    const avatarBtn = document.createElement('button');
+    avatarBtn.type = 'button';
+    avatarBtn.className = 'nav-user-avatar';
+    avatarBtn.setAttribute('aria-haspopup', 'true');
+    avatarBtn.setAttribute('aria-expanded', 'false');
+    avatarBtn.setAttribute('aria-label', 'Account menu');
+    avatarBtn.textContent = (email || '').trim().charAt(0).toUpperCase() || '?';
+
+    const dropdown = document.createElement('div');
+    dropdown.className = 'nav-user-dropdown';
+    dropdown.hidden = true;
+
+    const emailEl = document.createElement('p');
+    emailEl.className = 'nav-user-dropdown-email';
+    emailEl.textContent = email || '';
 
     const historyLink = document.createElement('a');
     historyLink.href = '#';
@@ -217,12 +259,9 @@
     historyLink.textContent = 'History';
     historyLink.addEventListener('click', (e) => {
       e.preventDefault();
+      closeUserMenu();
       if (window.trueSealHistory) window.trueSealHistory.open();
     });
-
-    const emailSpan = document.createElement('span');
-    emailSpan.className = 'nav-user-email';
-    emailSpan.textContent = (email || '').split('@')[0];
 
     const logoutLink = document.createElement('a');
     logoutLink.href = '#';
@@ -230,12 +269,36 @@
     logoutLink.textContent = 'Log out';
     logoutLink.addEventListener('click', async (e) => {
       e.preventDefault();
+      closeUserMenu();
       const client = await getSupabaseClient();
       await client.auth.signOut();
     });
 
-    navAuth.append(historyLink, emailSpan, logoutLink);
+    dropdown.append(emailEl, historyLink, logoutLink);
+
+    avatarBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      dropdown.hidden = !dropdown.hidden;
+      avatarBtn.setAttribute('aria-expanded', String(!dropdown.hidden));
+    });
+
+    menu.append(avatarBtn, dropdown);
+    navAuth.append(menu);
   }
+
+  document.addEventListener('click', (e) => {
+    const dropdown = navAuth.querySelector('.nav-user-dropdown');
+    if (!dropdown || dropdown.hidden) return;
+    if (!dropdown.closest('.nav-user-menu').contains(e.target)) {
+      closeUserMenu();
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    const dropdown = navAuth.querySelector('.nav-user-dropdown');
+    if (dropdown && !dropdown.hidden) closeUserMenu();
+  });
 
   // Paint the logged-out nav immediately (interactive right away, no flash
   // of dead links) while the session check happens in the background.
@@ -270,6 +333,7 @@
   window.trueSealAuth = {
     getClient: getSupabaseClient,
     getUser: () => currentUser,
+    openModal,
     ready
   };
 })();
