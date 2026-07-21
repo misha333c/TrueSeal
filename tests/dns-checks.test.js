@@ -97,6 +97,60 @@ describe('checkSpf', () => {
     // The include: itself counts as 1; its unresolvable target contributes no more.
     expect(result.lookupCount).toBe(1);
   });
+
+  test('an over-limit record ranks includes by cost and calls out the one to remove', async () => {
+    // Five vendor includes, each with its own nested a/mx/ptr mechanisms, so
+    // the real recursive resolver (fetchSpfRecordForCounting + countSpfLookups)
+    // does all the work — nothing here is precomputed. Costs work out to
+    // vendor-a=4, vendor-b=3, vendor-c=2, vendor-d=2, vendor-e=1 => 12 total.
+    dns.resolveTxt.mockImplementation(async (name) => {
+      const records = {
+        'overlimit-test.com':
+          'v=spf1 include:vendor-a.overlimit-test.com include:vendor-b.overlimit-test.com ' +
+          'include:vendor-c.overlimit-test.com include:vendor-d.overlimit-test.com ' +
+          'include:vendor-e.overlimit-test.com ~all',
+        'vendor-a.overlimit-test.com': 'v=spf1 a mx ptr -all',
+        'vendor-b.overlimit-test.com': 'v=spf1 a mx -all',
+        'vendor-c.overlimit-test.com': 'v=spf1 a -all',
+        'vendor-d.overlimit-test.com': 'v=spf1 mx -all',
+        'vendor-e.overlimit-test.com': 'v=spf1 -all'
+      };
+      if (records[name]) return [[records[name]]];
+      throw notFoundError();
+    });
+
+    // Real DNS-backed checkSpf, not a hand-built fixture.
+    const spf = await lib.checkSpf('overlimit-test.com');
+    expect(spf.lookupCount).toBe(12);
+    expect(spf.includeCosts).toEqual([
+      { target: 'vendor-a.overlimit-test.com', count: 4 },
+      { target: 'vendor-b.overlimit-test.com', count: 3 },
+      { target: 'vendor-c.overlimit-test.com', count: 2 },
+      { target: 'vendor-d.overlimit-test.com', count: 2 },
+      { target: 'vendor-e.overlimit-test.com', count: 1 }
+    ]);
+
+    // Real recommendation code, fed the real checkSpf output.
+    const dkim = { found: false, status: 'not_found', selector: null, record: null, tags: {} };
+    const dmarc = { found: false, record: null, policy: null, tags: {} };
+    const { recommendations } = lib.buildScoreAndAdvice(spf, dkim, dmarc);
+    const spfRec = recommendations.find(r => r.issue.includes('DNS lookups to evaluate'));
+
+    // eslint-disable-next-line no-console
+    console.log('\nSPF over-limit recommendation:\nissue:', spfRec.issue, '\nfix:  ', spfRec.fix, '\n');
+
+    // 12 total, passing requires <=9, so 3 need to come off.
+    expect(spfRec.fix).toContain("You're 3 lookups over the limit.");
+    // The single highest-cost include (4) covers the 3-lookup overage on its own.
+    expect(spfRec.fix).toContain(
+      'include:vendor-a.overlimit-test.com alone accounts for 4 lookups — if unused, removing it would bring you under the limit.'
+    );
+    expect(spfRec.fix).toContain(
+      'Ranked by lookup cost, highest first: include:vendor-a.overlimit-test.com (4 lookups), ' +
+      'include:vendor-b.overlimit-test.com (3 lookups), include:vendor-c.overlimit-test.com (2 lookups), ' +
+      'include:vendor-d.overlimit-test.com (2 lookups), include:vendor-e.overlimit-test.com (1 lookup).'
+    );
+  });
 });
 
 describe('checkDkim', () => {

@@ -147,7 +147,14 @@ async function fetchSpfRecordForCounting(domain) {
 // Recurses into include:/redirect= targets, tracking visited domains in the
 // current chain to break circular includes, and stops past
 // MAX_SPF_RECURSION_DEPTH so a pathological chain can't recurse forever.
-async function countSpfLookups(domain, record, visited = new Set(), depth = 0, counter = { total: 0 }) {
+//
+// Alongside the running total, counter.includes collects a per-entry cost
+// for each include: mechanism written directly in the domain's own record
+// (depth 0 only) — its own lookup plus everything its chain recurses into.
+// Nested includes (found inside a vendor's own record) are folded into
+// their parent's cost rather than listed separately, since they aren't
+// something the domain owner can directly remove.
+async function countSpfLookups(domain, record, visited = new Set(), depth = 0, counter = { total: 0, includes: [] }) {
   if (depth > MAX_SPF_RECURSION_DEPTH || visited.has(domain)) {
     return 0;
   }
@@ -166,18 +173,26 @@ async function countSpfLookups(domain, record, visited = new Set(), depth = 0, c
     const mechanism = token.replace(/^[+\-~?]/, '');
 
     let target = null;
+    let isInclude = false;
     if (mechanism.startsWith('include:')) {
       target = mechanism.slice('include:'.length);
+      isInclude = true;
     } else if (mechanism.startsWith('redirect=')) {
       target = mechanism.slice('redirect='.length);
     }
 
     if (target !== null) {
+      let ownCount = 1;
       count += 1;
       counter.total += 1;
       const targetRecord = await fetchSpfRecordForCounting(target);
       if (targetRecord) {
-        count += await countSpfLookups(target, targetRecord, visited, depth + 1, counter);
+        const nested = await countSpfLookups(target, targetRecord, visited, depth + 1, counter);
+        count += nested;
+        ownCount += nested;
+      }
+      if (isInclude && depth === 0) {
+        counter.includes.push({ target, count: ownCount });
       }
     } else if (
       mechanism === 'a' || mechanism.startsWith('a:') || mechanism.startsWith('a/') ||
@@ -212,8 +227,12 @@ async function checkSpf(domain) {
     }
 
     const spf = spfRecords[0];
-    const lookupCount = await countSpfLookups(domain, spf);
-    return { found: true, status: 'found', record: spf, records: spfRecords, tags: parseRecordTags(spf), lookupCount };
+    const counter = { total: 0, includes: [] };
+    const lookupCount = await countSpfLookups(domain, spf, new Set(), 0, counter);
+    return {
+      found: true, status: 'found', record: spf, records: spfRecords, tags: parseRecordTags(spf),
+      lookupCount, includeCosts: counter.includes
+    };
   } catch (err) {
     return { found: false, status: 'not_found', record: null, records: [], tags: {}, lookupCount: 0 };
   }
@@ -365,6 +384,53 @@ async function checkDnssec(domain) {
   return { found };
 }
 
+// Builds the "what to do" text for an over-limit SPF record. Ranks each
+// top-level include: by how many lookups its chain costs, then tries to
+// point at the smallest concrete set of includes whose removal would bring
+// the domain back under the limit — falling back to just the ranked list
+// (letting the user decide) when no include or small combination clearly
+// accounts for enough of the overage on its own. This never proposes a
+// rewritten/flattened record, only which existing includes to look at.
+function buildSpfOverLimitFix(spf) {
+  const over = spf.lookupCount - 9;
+  const ranked = [...(spf.includeCosts || [])].sort((a, b) => b.count - a.count);
+
+  const plural = n => (n === 1 ? '' : 's');
+  const overPhrase = `You're ${over} lookup${plural(over)} over the limit.`;
+
+  if (ranked.length === 0) {
+    return 'Combine your "include:" mechanisms or ask your email provider about SPF flattening to bring the lookup count below 10.';
+  }
+
+  const rankedList = ranked
+    .map(i => `include:${i.target} (${i.count} lookup${plural(i.count)})`)
+    .join(', ');
+
+  const top = ranked[0];
+  if (top.count >= over) {
+    return `${overPhrase} include:${top.target} alone accounts for ${top.count} lookup${plural(top.count)} — ` +
+      `if unused, removing it would bring you under the limit. Ranked by lookup cost, highest first: ${rankedList}.`;
+  }
+
+  const combo = [];
+  let cumulative = 0;
+  for (const entry of ranked) {
+    combo.push(entry);
+    cumulative += entry.count;
+    if (cumulative >= over) break;
+  }
+
+  if (cumulative >= over && combo.length > 1) {
+    const comboList = combo.map(i => `include:${i.target}`).join(' + ');
+    return `${overPhrase} No single include accounts for enough on its own, but removing ${comboList} together ` +
+      `(${cumulative} lookups) would bring you under the limit if they're unused. ` +
+      `Ranked by lookup cost, highest first: ${rankedList}.`;
+  }
+
+  return `${overPhrase} No single include is a clear fix on its own — here's the full breakdown, ranked by ` +
+    `lookup cost, highest first, so you can decide what to trim: ${rankedList}.`;
+}
+
 function buildScoreAndAdvice(spf, dkim, dmarc) {
   let score = 0;
   const recommendations = [];
@@ -374,7 +440,7 @@ function buildScoreAndAdvice(spf, dkim, dmarc) {
       issue: `Your SPF record needs ${spf.lookupCount} DNS lookups to evaluate, which exceeds RFC 7208's ` +
         '10-lookup limit, so SPF is already failing ("permerror") for anyone receiving your mail, even ' +
         'though a record exists.',
-      fix: 'Combine your "include:" mechanisms or ask your email provider about SPF flattening to bring the lookup count below 10.'
+      fix: buildSpfOverLimitFix(spf)
     });
   } else if (spf.found) {
     score += 30;

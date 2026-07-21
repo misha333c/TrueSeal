@@ -192,6 +192,72 @@ body::before {
   border-color: var(--accent);
 }
 
+.selector-discover {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+  background: var(--card-bg-subtle);
+}
+
+.selector-discover-hint {
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+
+.selector-discover-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.selector-discover-row code {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+  padding: 6px 8px;
+  font-size: 13px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--ink);
+}
+
+.selector-discover-row button {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--card-bg);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.selector-discover-row button:hover {
+  border-color: var(--accent);
+}
+
+.selector-discover-status {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-muted);
+  min-height: 1.5em;
+}
+
+.selector-discover-status.is-found {
+  color: var(--green);
+  font-weight: 600;
+}
+
+.selector-discover-status.is-timeout {
+  color: var(--orange);
+}
+
 /* Narrow screens: the checker tool's fixed-px widths (.hero-product-frame
    is a shrink-to-fit flex item, so .container's `width: 800px; max-width:
    100%` never actually gets clamped by the viewport) overflow small

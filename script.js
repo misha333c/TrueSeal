@@ -2,9 +2,119 @@ const button = document.getElementById('check-button');
 const input = document.getElementById('domain-input');
 const selectorInput = document.getElementById('selector-input');
 const result = document.getElementById('result');
+const selectorToggle = document.querySelector('.selector-toggle');
+const discoverAddressEl = document.getElementById('selector-discover-address');
+const discoverCopyButton = document.getElementById('selector-discover-copy');
+const discoverStatusEl = document.getElementById('selector-discover-status');
 
 let currentDomain = null;
 let starButton = null;
+
+// The address users send a test email to when they don't know their DKIM
+// selector. "test" is the fixed mailbox; the part after "+" is a random
+// per-session token so we can tell whose test email is whose once the
+// Worker reads it back off the incoming message.
+const DISCOVER_DOMAIN = 'trueseal.help';
+let discoverToken = null;
+
+function generateDiscoverToken(length = 6) {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  const randomValues = crypto.getRandomValues(new Uint8Array(length));
+  return Array.from(randomValues, (byte) => chars[byte % chars.length]).join('');
+}
+
+// Runs once, the first time the "Know your DKIM selector?" panel is opened,
+// so each visitor gets a fresh token without regenerating it on every toggle.
+function ensureDiscoverAddress() {
+  if (discoverToken || !discoverAddressEl) return;
+  discoverToken = generateDiscoverToken();
+  discoverAddressEl.textContent = `test+${discoverToken}@${DISCOVER_DOMAIN}`;
+  startPolling(discoverToken);
+}
+
+// The Worker deployed in email-worker/ also answers plain web requests (not
+// just emails) at this address, so the page can ask it "any result yet?".
+// Replace this with the exact URL `wrangler deploy` prints for that Worker.
+https://trueseal-dkim-selector-test.trueseal-dkim.workers.dev
+// "Polling" just means: instead of the Worker pushing us an answer the
+// moment it's ready, the page asks "is it ready yet?" over and over on a
+// timer, the same way you might refresh a delivery-tracking page yourself
+// every few seconds instead of waiting for a notification.
+const POLL_INTERVAL_MS = 4000;
+const POLL_TIMEOUT_MS = 2 * 60 * 1000;
+
+let pollTimeoutId = null;
+
+function setDiscoverStatus(text, variant) {
+  if (!discoverStatusEl) return;
+  discoverStatusEl.textContent = text;
+  discoverStatusEl.classList.remove('is-found', 'is-timeout');
+  if (variant) discoverStatusEl.classList.add(variant);
+}
+
+function stopPolling() {
+  if (pollTimeoutId !== null) {
+    clearTimeout(pollTimeoutId);
+    pollTimeoutId = null;
+  }
+}
+
+async function checkForDiscoverResult(token, deadline) {
+  try {
+    const response = await fetch(`${DKIM_WORKER_URL}/lookup?token=${encodeURIComponent(token)}`);
+    const data = await response.json();
+
+    if (data.found) {
+      setDiscoverStatus(`Found it! Your DKIM selector is: ${data.selector}`, 'is-found');
+      selectorInput.value = data.selector;
+      if (input.value.trim()) {
+        runCheck();
+      }
+      return;
+    }
+  } catch (err) {
+    // A single failed check (offline, Worker briefly unreachable, etc.)
+    // isn't worth alarming a non-technical user about — just try again on
+    // the next tick below.
+  }
+
+  if (Date.now() >= deadline) {
+    setDiscoverStatus(
+      'Still waiting for your email... make sure you sent it to the exact address above, then wait a bit longer.',
+      'is-timeout'
+    );
+    return;
+  }
+
+  pollTimeoutId = setTimeout(() => checkForDiscoverResult(token, deadline), POLL_INTERVAL_MS);
+}
+
+function startPolling(token) {
+  stopPolling();
+  setDiscoverStatus('Waiting for your test email... this will update on its own once it arrives.');
+  checkForDiscoverResult(token, Date.now() + POLL_TIMEOUT_MS);
+}
+
+if (selectorToggle) {
+  selectorToggle.addEventListener('toggle', () => {
+    if (selectorToggle.open) ensureDiscoverAddress();
+  });
+}
+
+if (discoverCopyButton) {
+  discoverCopyButton.addEventListener('click', async () => {
+    ensureDiscoverAddress();
+    try {
+      await navigator.clipboard.writeText(discoverAddressEl.textContent);
+      const original = discoverCopyButton.textContent;
+      discoverCopyButton.textContent = 'Copied!';
+      setTimeout(() => { discoverCopyButton.textContent = original; }, 1500);
+    } catch (err) {
+      // Clipboard access can fail (e.g. insecure context or denied
+      // permission) — the address is still visible to copy by hand.
+    }
+  });
+}
 
 async function runCheck(domainArg, selectorArg) {
   const domain = (domainArg !== undefined ? domainArg : input.value).trim();
@@ -347,11 +457,11 @@ function dkimCheckItem(dkim, customSelector) {
     : 'Not found among common selectors';
   const note = customSelector
     ? `DKIM selectors can't be fully discovered via DNS alone, so this means no record was found among ` +
-      `common selector names or the custom selector "${customSelector}" you provided. This isn't a guaranteed ` +
-      "absence of DKIM. Double-check the selector, or the domain's provider may use a different one."
+    `common selector names or the custom selector "${customSelector}" you provided. This isn't a guaranteed ` +
+    "absence of DKIM. Double-check the selector, or the domain's provider may use a different one."
     : "DKIM selectors can't be fully discovered via DNS alone, so this only means no record was found among " +
-      "common selector names. It isn't a guaranteed absence of DKIM. The domain's provider may use a custom " +
-      "selector this check doesn't know about.";
+    "common selector names. It isn't a guaranteed absence of DKIM. The domain's provider may use a custom " +
+    "selector this check doesn't know about.";
   return createCheckItem('fail', 'DKIM', detail, null, null, note);
 }
 

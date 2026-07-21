@@ -40,8 +40,8 @@
   <main class="hero" id="top">
     <div class="hero-copy">
       <p class="hero-eyebrow">Email authentication, demystified</p>
-      <h1 class="hero-headline">Your emails are being <span class="hero-accent">judged</span> before anyone reads
-        them.</h1>
+      <h1 class="hero-headline">Your emails are landing in <span class="hero-accent">spam</span>. Here's why, and 3
+        lines of code to fix it.</h1>
       <p class="hero-subhead">Enter a domain and see exactly which authentication checks it passes, fails, or
         leaves ambiguous, in plain English, not raw DNS output.</p>
     </div>
@@ -60,6 +60,18 @@
           <summary>Know your DKIM selector?</summary>
           <div class="selector-toggle-content">
             <input type="text" id="selector-input" placeholder="e.g. selector1, google, mandrill">
+
+            <div class="selector-discover">
+              <p class="selector-discover-hint">
+                Don't know it? Send a blank email <strong>from the domain you're checking</strong> to the
+                address below, and we'll read the selector off the DKIM signature it arrives with.
+              </p>
+              <div class="selector-discover-row">
+                <code id="selector-discover-address">Generating address&hellip;</code>
+                <button type="button" id="selector-discover-copy">Copy</button>
+              </div>
+              <p class="selector-discover-status" id="selector-discover-status"></p>
+            </div>
           </div>
         </details>
       </div>
