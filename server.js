@@ -16,15 +16,16 @@ const app = express();
 const PORT = 3000;
 
 // Sets standard HTTP security headers (CSP, X-Frame-Options, etc.) using
-// helmet's defaults, widened just enough to allow the Supabase JS client:
-// script-src for the unpkg CDN build, connect-src for the browser's direct
-// calls to the Supabase project's auth API.
+// helmet's defaults, widened just enough to allow the Supabase JS client
+// (script-src for the unpkg CDN build, connect-src for the browser's direct
+// calls to the Supabase project's auth API) and the DKIM selector Worker's
+// /lookup polling endpoint (connect-src).
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       ...helmet.contentSecurityPolicy.getDefaultDirectives(),
       'script-src': ["'self'", 'https://unpkg.com'],
-      'connect-src': ["'self'", 'https://*.supabase.co', 'wss://*.supabase.co']
+      'connect-src': ["'self'", 'https://*.supabase.co', 'wss://*.supabase.co', 'https://trueseal-dkim-selector-test.trueseal-dkim.workers.dev']
     }
   }
 }));
