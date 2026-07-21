@@ -35,7 +35,7 @@ function ensureDiscoverAddress() {
 // The Worker deployed in email-worker/ also answers plain web requests (not
 // just emails) at this address, so the page can ask it "any result yet?".
 // Replace this with the exact URL `wrangler deploy` prints for that Worker.
-https://trueseal-dkim-selector-test.trueseal-dkim.workers.dev
+const DKIM_WORKER_URL = 'https://trueseal-dkim-selector-test.trueseal-dkim.workers.dev';
 // "Polling" just means: instead of the Worker pushing us an answer the
 // moment it's ready, the page asks "is it ready yet?" over and over on a
 // timer, the same way you might refresh a delivery-tracking page yourself
