@@ -6,6 +6,7 @@ const selectorToggle = document.querySelector('.selector-toggle');
 const discoverAddressEl = document.getElementById('selector-discover-address');
 const discoverCopyButton = document.getElementById('selector-discover-copy');
 const discoverStatusEl = document.getElementById('selector-discover-status');
+const discoverHintEl = document.getElementById('selector-discover-hint');
 
 let currentDomain = null;
 let starButton = null;
@@ -30,6 +31,16 @@ function ensureDiscoverAddress() {
   discoverToken = generateDiscoverToken();
   discoverAddressEl.textContent = `test+${discoverToken}@${DISCOVER_DOMAIN}`;
   startPolling(discoverToken);
+}
+
+// Keeps the instructions concrete once we know which domain is actually
+// being checked, instead of a generic example — this is what the test
+// email only works if it's sent from, so it needs to be impossible to miss.
+function updateDiscoverHint(domain) {
+  if (!discoverHintEl) return;
+  discoverHintEl.textContent = domain
+    ? `Send a blank email from your business's email address (the one that ends in @${domain}) — for example, hello@${domain}.`
+    : "Send a blank email from your business's email address (the one that ends in @ your domain) — for example, if you're checking acc.com, send it from hello@acc.com.";
 }
 
 // The Worker deployed in email-worker/ also answers plain web requests (not
@@ -60,17 +71,38 @@ function stopPolling() {
 }
 
 async function checkForDiscoverResult(token, deadline) {
+  // Read fresh each tick (not captured once) so this stays correct even if
+  // the user edits the domain field after opening this panel.
+  const expectedDomain = (currentDomain || input.value || '').trim();
+  let sawMismatch = false;
+
   try {
     const response = await fetch(`${DKIM_WORKER_URL}/lookup?token=${encodeURIComponent(token)}`);
     const data = await response.json();
 
     if (data.found) {
-      setDiscoverStatus(`Found it! Your DKIM selector is: ${data.selector}`, 'is-found');
-      selectorInput.value = data.selector;
-      if (input.value.trim()) {
-        runCheck();
+      const actualDomain = (data.domain || '').trim();
+      const isMismatch = expectedDomain && actualDomain &&
+        actualDomain.toLowerCase() !== expectedDomain.toLowerCase();
+
+      if (isMismatch) {
+        // The DKIM check only works if the test email was sent from the
+        // domain being checked — this tells the user exactly what to fix,
+        // instead of leaving them with a plain "not found" result.
+        sawMismatch = true;
+        setDiscoverStatus(
+          `That email came from ${actualDomain}, not ${expectedDomain}. Please send it from an ` +
+          `address at ${expectedDomain} instead.`,
+          'is-timeout'
+        );
+      } else {
+        setDiscoverStatus(`Found it! Your DKIM selector is: ${data.selector}`, 'is-found');
+        selectorInput.value = data.selector;
+        if (input.value.trim()) {
+          runCheck();
+        }
+        return;
       }
-      return;
     }
   } catch (err) {
     // A single failed check (offline, Worker briefly unreachable, etc.)
@@ -79,10 +111,15 @@ async function checkForDiscoverResult(token, deadline) {
   }
 
   if (Date.now() >= deadline) {
-    setDiscoverStatus(
-      'Still waiting for your email... make sure you sent it to the exact address above, then wait a bit longer.',
-      'is-timeout'
-    );
+    // If we already told them their email came from the wrong domain, that
+    // message is still the useful, actionable one — don't clobber it with
+    // the generic "still waiting" text.
+    if (!sawMismatch) {
+      setDiscoverStatus(
+        'Still waiting for your email... make sure you sent it to the exact address above, then wait a bit longer.',
+        'is-timeout'
+      );
+    }
     return;
   }
 
@@ -99,6 +136,17 @@ if (selectorToggle) {
   selectorToggle.addEventListener('toggle', () => {
     if (selectorToggle.open) ensureDiscoverAddress();
   });
+}
+
+// Used by the "Confirm it now" button in the DKIM result: opens the
+// existing test-email panel (generating its address/token if it hasn't
+// been already) and scrolls it into view, so the user lands right on it
+// instead of having to scroll up and find it themselves.
+function revealSelectorDiscovery() {
+  if (!selectorToggle) return;
+  selectorToggle.open = true;
+  ensureDiscoverAddress();
+  selectorToggle.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 if (discoverCopyButton) {
@@ -456,13 +504,22 @@ function dkimCheckItem(dkim, customSelector) {
     ? `Not found among common selectors or "${customSelector}"`
     : 'Not found among common selectors';
   const note = customSelector
-    ? `DKIM selectors can't be fully discovered via DNS alone, so this means no record was found among ` +
-    `common selector names or the custom selector "${customSelector}" you provided. This isn't a guaranteed ` +
-    "absence of DKIM. Double-check the selector, or the domain's provider may use a different one."
-    : "DKIM selectors can't be fully discovered via DNS alone, so this only means no record was found among " +
-    "common selector names. It isn't a guaranteed absence of DKIM. The domain's provider may use a custom " +
-    "selector this check doesn't know about.";
-  return createCheckItem('fail', 'DKIM', detail, null, null, note);
+    ? `We didn't find a DKIM record among common selectors or the custom selector "${customSelector}" you ` +
+    "provided. This usually just means your provider uses a custom setup name we can't guess automatically " +
+    '— not that anything\'s broken.'
+    : "This usually just means your provider uses a custom setup name we can't guess automatically — not " +
+    'that anything\'s broken.';
+
+  const item = createCheckItem('fail', 'DKIM', detail, null, null, note);
+
+  const cta = document.createElement('button');
+  cta.type = 'button';
+  cta.className = 'check-cta';
+  cta.textContent = 'Confirm it now';
+  cta.addEventListener('click', revealSelectorDiscovery);
+  item.querySelector('.check-body').appendChild(cta);
+
+  return item;
 }
 
 function dmarcCheckItem(dmarc) {
@@ -549,10 +606,10 @@ function createRecommendationItem(rec) {
     return item;
   }
 
-  item.className = 'recommendation';
+  item.className = `recommendation severity-${rec.severity}`;
 
   const issueRow = document.createElement('p');
-  issueRow.className = 'recommendation-row';
+  issueRow.className = 'recommendation-row recommendation-issue';
   const issueLabel = document.createElement('span');
   issueLabel.className = 'recommendation-label';
   issueLabel.textContent = "What's going on: ";
@@ -561,13 +618,25 @@ function createRecommendationItem(rec) {
   item.appendChild(issueRow);
 
   const fixRow = document.createElement('p');
-  fixRow.className = 'recommendation-row';
+  fixRow.className = 'recommendation-row recommendation-fix';
   const fixLabel = document.createElement('span');
   fixLabel.className = 'recommendation-label';
   fixLabel.textContent = 'What to do: ';
   fixRow.appendChild(fixLabel);
   fixRow.appendChild(document.createTextNode(rec.fix));
   item.appendChild(fixRow);
+
+  // The DKIM "not found" recommendation gets the same shortcut into the
+  // test-email flow as the status box above, so fixing it doesn't require
+  // scrolling back up to hunt for that panel.
+  if (rec.id === 'dkim-not-found') {
+    const cta = document.createElement('button');
+    cta.type = 'button';
+    cta.className = 'check-cta';
+    cta.textContent = 'Confirm it now';
+    cta.addEventListener('click', revealSelectorDiscovery);
+    item.appendChild(cta);
+  }
 
   return item;
 }
@@ -578,6 +647,7 @@ const STAR_PATH = 'M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.6
 
 function createResultHeader(domain) {
   currentDomain = domain;
+  updateDiscoverHint(domain);
 
   const header = document.createElement('div');
   header.className = 'result-header';
