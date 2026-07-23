@@ -12,9 +12,11 @@ let currentDomain = null;
 let starButton = null;
 
 // The address users send a test email to when they don't know their DKIM
-// selector. "test" is the fixed mailbox; the part after "+" is a random
-// per-session token so we can tell whose test email is whose once the
-// Worker reads it back off the incoming message.
+// selector. The entire local part (everything before "@") IS the random
+// per-session token — no "+" tag — so we can tell whose test email is
+// whose once the Worker reads it back off the incoming message. Some email
+// clients (e.g. Zoho Mail) reject "+"-addressed recipients as invalid, so
+// this intentionally avoids that format.
 const DISCOVER_DOMAIN = 'trueseal.help';
 let discoverToken = null;
 
@@ -29,7 +31,7 @@ function generateDiscoverToken(length = 6) {
 function ensureDiscoverAddress() {
   if (discoverToken || !discoverAddressEl) return;
   discoverToken = generateDiscoverToken();
-  discoverAddressEl.textContent = `test+${discoverToken}@${DISCOVER_DOMAIN}`;
+  discoverAddressEl.textContent = `${discoverToken}@${DISCOVER_DOMAIN}`;
   startPolling(discoverToken);
 }
 
