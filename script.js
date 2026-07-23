@@ -59,8 +59,36 @@ let pollTimeoutId = null;
 function setDiscoverStatus(text, variant) {
   if (!discoverStatusEl) return;
   discoverStatusEl.textContent = text;
-  discoverStatusEl.classList.remove('is-found', 'is-timeout');
+  discoverStatusEl.classList.remove('is-found', 'is-timeout', 'is-waiting', 'is-watching', 'is-resolving');
   if (variant) discoverStatusEl.classList.add(variant);
+}
+
+// Briefly intensifies the waiting pulse — used as a "we're actively
+// watching now" cue right after the user copies the address, since that's
+// the moment they're about to go send the email.
+function pulseDiscoverWatching() {
+  if (!discoverStatusEl || !discoverStatusEl.classList.contains('is-waiting')) return;
+  discoverStatusEl.classList.add('is-watching');
+  setTimeout(() => discoverStatusEl.classList.remove('is-watching'), 4000);
+}
+
+const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// Instead of the pulsing text abruptly being replaced by "Found it!", this
+// briefly resolves into a checkmark first, so the state change reads as a
+// small "got it" moment rather than a jump cut.
+function revealDiscoverFound(selector) {
+  const showFoundText = () => setDiscoverStatus(`Found it! Your DKIM selector is: ${selector}`, 'is-found');
+
+  if (!discoverStatusEl || prefersReducedMotion) {
+    showFoundText();
+    return;
+  }
+
+  discoverStatusEl.classList.remove('is-found', 'is-timeout', 'is-waiting', 'is-watching');
+  discoverStatusEl.textContent = '✓';
+  discoverStatusEl.classList.add('is-resolving');
+  setTimeout(showFoundText, 400);
 }
 
 function stopPolling() {
@@ -96,8 +124,8 @@ async function checkForDiscoverResult(token, deadline) {
           'is-timeout'
         );
       } else {
-        setDiscoverStatus(`Found it! Your DKIM selector is: ${data.selector}`, 'is-found');
         selectorInput.value = data.selector;
+        revealDiscoverFound(data.selector);
         if (input.value.trim()) {
           runCheck();
         }
@@ -128,7 +156,7 @@ async function checkForDiscoverResult(token, deadline) {
 
 function startPolling(token) {
   stopPolling();
-  setDiscoverStatus('Waiting for your test email... this will update on its own once it arrives.');
+  setDiscoverStatus('Waiting for your test email... this will update on its own once it arrives.', 'is-waiting');
   checkForDiscoverResult(token, Date.now() + POLL_TIMEOUT_MS);
 }
 
@@ -152,6 +180,7 @@ function revealSelectorDiscovery() {
 if (discoverCopyButton) {
   discoverCopyButton.addEventListener('click', async () => {
     ensureDiscoverAddress();
+    pulseDiscoverWatching();
     try {
       await navigator.clipboard.writeText(discoverAddressEl.textContent);
       const original = discoverCopyButton.textContent;

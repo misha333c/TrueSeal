@@ -258,6 +258,50 @@ body::before {
   color: var(--orange);
 }
 
+.selector-discover-status.is-waiting {
+  animation: selector-discover-pulse 1.6s ease-in-out infinite;
+}
+
+/* Copying the address is a signal the user is about to send the email, so
+   the pulse quickens and deepens briefly — "we're actively watching now" —
+   then settles back to the calmer resting pulse above. */
+.selector-discover-status.is-waiting.is-watching {
+  animation-name: selector-discover-pulse-active;
+  animation-duration: 0.9s;
+}
+
+@keyframes selector-discover-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+@keyframes selector-discover-pulse-active {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* Brief resolve moment between "waiting" and "Found it!" so the result
+   doesn't just abruptly replace the pulsing text. */
+.selector-discover-status.is-resolving {
+  color: var(--green);
+  font-weight: 600;
+  animation: selector-discover-resolve 0.4s ease-out;
+}
+
+@keyframes selector-discover-resolve {
+  0% { opacity: 0.4; transform: scale(0.85); }
+  60% { opacity: 1; transform: scale(1.2); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .selector-discover-status.is-waiting,
+  .selector-discover-status.is-waiting.is-watching,
+  .selector-discover-status.is-resolving {
+    animation: none;
+  }
+}
+
 /* Narrow screens: the checker tool's fixed-px widths (.hero-product-frame
    is a shrink-to-fit flex item, so .container's `width: 800px; max-width:
    100%` never actually gets clamped by the viewport) overflow small
@@ -599,6 +643,24 @@ body::before {
   font-style: italic;
 }
 
+.check-cta {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--gold);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--gold);
+  cursor: pointer;
+}
+
+.check-cta:hover {
+  background: var(--gold);
+  color: white;
+}
+
 .tech-details {
   margin-top: 6px;
 }
@@ -736,8 +798,24 @@ body::before {
   padding: 10px 12px;
   background: var(--card-bg-subtle);
   border: 1px solid var(--grid);
-  border-left: 3px solid var(--gold);
+  border-left: 3px solid var(--border);
   border-radius: 6px;
+}
+
+/* Left-border color signals severity, matching the red/amber/gold coding
+   already used on the SPF/DKIM/DMARC status boxes above: fail = a real,
+   already-broken problem; warn = a meaningful gap worth fixing; info = an
+   optional/hardening suggestion, not something that's currently wrong. */
+.recommendation.severity-fail {
+  border-left-color: var(--red);
+}
+
+.recommendation.severity-warn {
+  border-left-color: var(--amber);
+}
+
+.recommendation.severity-info {
+  border-left-color: var(--gold);
 }
 
 .recommendation-row {
@@ -752,8 +830,28 @@ body::before {
 }
 
 .recommendation-label {
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-right: 2px;
+}
+
+/* "What to do" is the actionable half of the card, so it's weighted more
+   heavily than "What's going on" rather than reading as equally important. */
+.recommendation-issue {
   color: var(--ink-muted);
+}
+
+.recommendation-fix {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.recommendation .check-cta {
+  margin-top: 8px;
 }
 
 .recommendation-allclear {
