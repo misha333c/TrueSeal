@@ -115,6 +115,7 @@ function isValidSelectorFormat(selector) {
 }
 
 app.get('/check', checkLimiter, asyncHandler(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
   const rawDomain = (req.query.domain || '').trim().toLowerCase();
   const customSelector = (req.query.selector || '').trim();
 
