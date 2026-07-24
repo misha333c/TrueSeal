@@ -163,9 +163,11 @@ app.get('/check', checkLimiter, asyncHandler(async (req, res) => {
     });
   }
 
-  if (rootDomain !== domain) {
-    return res.json({ domain, type: 'subdomain', rootDomain });
-  }
+  // A subdomain still gets the full check run against it (email auth
+  // records CAN be set at any level, even though they usually live on the
+  // root domain) — this is just noted alongside the real results below,
+  // not used to skip the check entirely.
+  const isSubdomain = rootDomain !== domain;
 
   // Everything past this point involves real DNS/DoH work, so it's the
   // range worth caching. Sweeping here (rather than on a separate interval)
@@ -207,7 +209,8 @@ app.get('/check', checkLimiter, asyncHandler(async (req, res) => {
 
   const result = {
     domain, type: 'checked', spf, dkim, dmarc, score, recommendations,
-    extras: { mtaSts, tlsRpt, dnssec, bimi }
+    extras: { mtaSts, tlsRpt, dnssec, bimi },
+    ...(isSubdomain ? { isSubdomain: true, rootDomain } : {})
   };
   checkCache.set(cacheKey, { result, timestamp: Date.now() });
   res.json({ ...result, cached: false });

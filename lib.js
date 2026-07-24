@@ -440,14 +440,16 @@ function buildScoreAndAdvice(spf, dkim, dmarc) {
       issue: `Your SPF record needs ${spf.lookupCount} DNS lookups to evaluate, which exceeds RFC 7208's ` +
         '10-lookup limit, so SPF is already failing ("permerror") for anyone receiving your mail, even ' +
         'though a record exists.',
-      fix: buildSpfOverLimitFix(spf)
+      fix: buildSpfOverLimitFix(spf),
+      severity: 'fail'
     });
   } else if (spf.found) {
     score += 30;
     if (spf.lookupCount >= 8) {
       recommendations.push({
         issue: `Your SPF record is close to RFC 7208's 10-DNS-lookup limit, currently at ${spf.lookupCount} of 10.`,
-        fix: 'Be cautious adding more third-party sending services (marketing tools, CRMs, etc.), since one more could push it over the limit and break SPF entirely ("permerror").'
+        fix: 'Be cautious adding more third-party sending services (marketing tools, CRMs, etc.), since one more could push it over the limit and break SPF entirely ("permerror").',
+        severity: 'warn'
       });
     }
   } else if (spf.status === 'multiple_records') {
@@ -455,12 +457,14 @@ function buildScoreAndAdvice(spf, dkim, dmarc) {
       issue: `Found ${spf.records.length} SPF records for this domain, which is invalid. RFC 7208 permits ` +
         'only one per domain, so SPF evaluation returns a "permerror" and fails entirely, even if each ' +
         'individual record looks fine on its own.',
-      fix: 'Merge all the "include:" mechanisms from every record into a single "v=spf1" TXT record, then remove the duplicates.'
+      fix: 'Merge all the "include:" mechanisms from every record into a single "v=spf1" TXT record, then remove the duplicates.',
+      severity: 'fail'
     });
   } else {
     recommendations.push({
       issue: 'No SPF record was found for this domain.',
-      fix: 'Add a TXT record (e.g. "v=spf1 include:_spf.yourprovider.com ~all") so receiving mail servers know which servers are allowed to send email for your domain.'
+      fix: 'Add a TXT record (e.g. "v=spf1 include:_spf.yourprovider.com ~all") so receiving mail servers know which servers are allowed to send email for your domain.',
+      severity: 'fail'
     });
   }
 
@@ -476,14 +480,16 @@ function buildScoreAndAdvice(spf, dkim, dmarc) {
         issue: `A DKIM record and public key were found (selector "${dkim.selector}"), but the key data ` +
           "couldn't be parsed to verify its type or strength — it may be malformed, truncated, or use a " +
           "format this check doesn't recognize.",
-        fix: "Double-check the record was copied correctly from your email provider's DKIM setup instructions, and republish it if needed."
+        fix: "Double-check the record was copied correctly from your email provider's DKIM setup instructions, and republish it if needed.",
+        severity: 'warn'
       });
     } else if (keyStrength.type === 'rsa' && keyStrength.bits < 1024) {
       score += 15;
       recommendations.push({
         issue: `Your DKIM key (selector "${dkim.selector}") is only ${keyStrength.bits}-bit RSA, which is ` +
           'below the 1024-bit floor generally considered secure against factoring attacks.',
-        fix: 'Rotate to a 2048-bit key.'
+        fix: 'Rotate to a 2048-bit key.',
+        severity: 'fail'
       });
     } else {
       score += 30;
@@ -491,7 +497,8 @@ function buildScoreAndAdvice(spf, dkim, dmarc) {
         recommendations.push({
           issue: `Your DKIM key (selector "${dkim.selector}") is ${keyStrength.bits}-bit RSA. It's not insecure, ` +
             'but below the modern 2048-bit baseline.',
-          fix: 'Worth upgrading to a 2048-bit key next time DKIM settings are touched.'
+          fix: 'Worth upgrading to a 2048-bit key next time DKIM settings are touched.',
+          severity: 'info'
         });
       }
     }
@@ -500,12 +507,15 @@ function buildScoreAndAdvice(spf, dkim, dmarc) {
       issue: `A DKIM record was found (selector "${dkim.selector}"), but it has no public key, so it's ` +
         'inactive, either intentionally disabled/revoked, or the setup was never finished. Mail signed ' +
         'with this selector will fail DKIM checks.',
-      fix: 'Contact your email provider to re-enable it with a real key, or remove the stale record if it\'s no longer needed.'
+      fix: 'Contact your email provider to re-enable it with a real key, or remove the stale record if it\'s no longer needed.',
+      severity: 'fail'
     });
   } else {
     recommendations.push({
       issue: 'No DKIM record was found for common selectors.',
-      fix: 'Check your email provider\'s dashboard for their DKIM setup instructions, which will give you the exact selector and TXT record to add.'
+      fix: "Send us a quick test email and we'll check the real thing in seconds — or check your email provider's dashboard for their DKIM setup instructions.",
+      severity: 'fail',
+      id: 'dkim-not-found'
     });
   }
 
@@ -516,19 +526,22 @@ function buildScoreAndAdvice(spf, dkim, dmarc) {
       score += 30;
       recommendations.push({
         issue: 'Your DMARC policy is set to "p=quarantine", which sends suspicious mail to spam rather than blocking it outright, a solid middle ground.',
-        fix: 'Once you\'ve confirmed legitimate mail reliably passes SPF/DKIM, consider upgrading to "p=reject" for the strongest protection.'
+        fix: 'Once you\'ve confirmed legitimate mail reliably passes SPF/DKIM, consider upgrading to "p=reject" for the strongest protection.',
+        severity: 'info'
       });
     } else if (dmarc.policy === 'none') {
       score += 15;
       recommendations.push({
         issue: 'Your DMARC policy is set to "p=none". A record exists and you\'ll receive reports, but it isn\'t enforcing anything yet, so spoofed mail is delivered normally.',
-        fix: 'Once you\'ve confirmed legitimate mail reliably passes SPF/DKIM, move to "p=quarantine" or "p=reject" so the record actually protects you.'
+        fix: 'Once you\'ve confirmed legitimate mail reliably passes SPF/DKIM, move to "p=quarantine" or "p=reject" so the record actually protects you.',
+        severity: 'warn'
       });
     } else {
       score += 10;
       recommendations.push({
         issue: 'Your DMARC record doesn\'t specify a policy ("p=none", "p=quarantine", or "p=reject"), so it\'s not clear how receiving mail servers should treat spoofed email.',
-        fix: 'Add an explicit policy so the record actually does something.'
+        fix: 'Add an explicit policy so the record actually does something.',
+        severity: 'warn'
       });
     }
 
@@ -536,12 +549,14 @@ function buildScoreAndAdvice(spf, dkim, dmarc) {
       if (dmarc.policy === 'none') {
         recommendations.push({
           issue: 'Your DMARC record has no "rua" reporting address and is set to "p=none", so spoofed mail isn\'t being blocked or quarantined, and you\'re not receiving reports about it either.',
-          fix: 'Add "rua=mailto:you@yourdomain.com" and consider moving to "p=quarantine" or "p=reject" once you\'ve reviewed the reports.'
+          fix: 'Add "rua=mailto:you@yourdomain.com" and consider moving to "p=quarantine" or "p=reject" once you\'ve reviewed the reports.',
+          severity: 'warn'
         });
       } else if (dmarc.policy === 'reject' || dmarc.policy === 'quarantine') {
         recommendations.push({
           issue: 'Your DMARC policy is enforcing correctly, but there\'s no "rua" reporting address set, so you have no visibility into what mail is being blocked or quarantined on your behalf.',
-          fix: 'Add "rua=mailto:you@yourdomain.com" to your DMARC record to start receiving aggregate reports.'
+          fix: 'Add "rua=mailto:you@yourdomain.com" to your DMARC record to start receiving aggregate reports.',
+          severity: 'info'
         });
       }
     }
@@ -554,14 +569,16 @@ function buildScoreAndAdvice(spf, dkim, dmarc) {
         recommendations.push({
           issue: `${relaxedProtocols.join(' and ')} alignment ${relaxedProtocols.length > 1 ? 'are' : 'is'} ` +
             'set to relaxed (the default), which allows a subdomain of your sending/signing domain to still count as aligned.',
-          fix: 'This is optional hardening, not required. Only switch to strict alignment ("adkim=s"/"aspf=s") after confirming your legitimate mail already passes SPF/DKIM from the exact sending domain, since strict mode will break alignment for mail sent from subdomains.'
+          fix: 'This is optional hardening, not required. Only switch to strict alignment ("adkim=s"/"aspf=s") after confirming your legitimate mail already passes SPF/DKIM from the exact sending domain, since strict mode will break alignment for mail sent from subdomains.',
+          severity: 'info'
         });
       }
     }
   } else {
     recommendations.push({
       issue: 'No DMARC record was found for this domain.',
-      fix: 'Add a TXT record at "_dmarc.yourdomain.com" (e.g. "v=DMARC1; p=none; rua=mailto:you@yourdomain.com") to start monitoring who is sending email as your domain.'
+      fix: 'Add a TXT record at "_dmarc.yourdomain.com" (e.g. "v=DMARC1; p=none; rua=mailto:you@yourdomain.com") to start monitoring who is sending email as your domain.',
+      severity: 'fail'
     });
   }
 
