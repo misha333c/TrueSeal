@@ -222,11 +222,6 @@ async function runCheck(domainArg, selectorArg) {
       return;
     }
 
-    if (data.type === 'subdomain') {
-      showNotice('subdomain', `This looks like a subdomain, and email security records are typically set on the root domain. Try checking ${data.rootDomain} instead.`);
-      return;
-    }
-
     if (data.type === 'nonexistent') {
       showNotice('nonexistent', "This domain doesn't appear to exist. Check the spelling.");
       return;
@@ -263,10 +258,18 @@ function showMessage(text, isError = false) {
   result.appendChild(p);
 }
 
-// kind: 'subdomain' | 'nonexistent'
+// Replaces the whole result area with a single message — for outcomes
+// where there's nothing else to show alongside it (currently just a
+// domain that doesn't exist at all).
 function showNotice(kind, text) {
   result.replaceChildren();
+  result.appendChild(createNotice(kind, text));
+}
 
+// Builds a standalone notice element without touching the result area, so
+// it can be inserted alongside real results (e.g. the subdomain note,
+// which sits above full check results rather than replacing them).
+function createNotice(kind, text) {
   const notice = document.createElement('div');
   notice.className = `notice ${kind}`;
 
@@ -279,7 +282,7 @@ function showNotice(kind, text) {
 
   notice.appendChild(icon);
   notice.appendChild(p);
-  result.appendChild(notice);
+  return notice;
 }
 
 function scoreClass(score) {
@@ -798,6 +801,14 @@ function renderResult(data, customSelector) {
   result.replaceChildren();
 
   result.appendChild(createResultHeader(data.domain));
+
+  if (data.isSubdomain) {
+    result.appendChild(createNotice(
+      'subdomain',
+      `This looks like a subdomain, and email security records are typically set on the root domain. ` +
+      `The results below are for ${data.domain} itself — you may also want to check ${data.rootDomain}.`
+    ));
+  }
 
   const grid = document.createElement('div');
   grid.className = 'result-grid';
