@@ -207,9 +207,10 @@ app.get('/check', checkLimiter, asyncHandler(async (req, res) => {
   ]);
 
   const { score, recommendations } = lib.buildScoreAndAdvice(spf, dkim, dmarc);
+  const verdict = lib.buildVerdict(spf, dkim, dmarc);
 
   const result = {
-    domain, type: 'checked', spf, dkim, dmarc, score, recommendations,
+    domain, type: 'checked', spf, dkim, dmarc, score, recommendations, verdict,
     extras: { mtaSts, tlsRpt, dnssec, bimi },
     ...(isSubdomain ? { isSubdomain: true, rootDomain } : {})
   };
