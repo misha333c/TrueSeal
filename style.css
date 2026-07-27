@@ -828,7 +828,7 @@ body::before {
 }
 
 .recommendation {
-  padding: 10px 12px;
+  padding: 16px 16px;
   background: var(--card-bg-subtle);
   border: 1px solid var(--grid);
   border-left: 3px solid var(--border);
@@ -854,21 +854,22 @@ body::before {
 .recommendation-row {
   margin: 0;
   font-size: 13px;
-  line-height: 1.5;
+  line-height: 1.6;
   color: var(--ink);
 }
 
 .recommendation-row + .recommendation-row {
-  margin-top: 4px;
+  margin-top: 14px;
 }
 
 .recommendation-label {
+  display: block;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--gold);
-  margin-right: 2px;
+  margin: 0 0 3px;
 }
 
 /* "What to do" is the actionable half of the card, so it's weighted more
