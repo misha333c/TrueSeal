@@ -585,21 +585,21 @@ function buildScoreAndAdvice(spf, dkim, dmarc) {
       score += 30;
       recommendations.push({
         issue: 'Your DMARC policy is set to "p=quarantine", which sends suspicious mail to spam rather than blocking it outright, a solid middle ground.',
-        fix: 'Once you\'ve confirmed legitimate mail reliably passes SPF/DKIM, consider upgrading to "p=reject" for the strongest protection.',
+        fix: "Good spot. Move to full blocking once you're confident it's safe.",
         severity: 'info'
       });
     } else if (dmarc.policy === 'none') {
       score += 15;
       recommendations.push({
         issue: 'Your DMARC policy is set to "p=none". A record exists and you\'ll receive reports, but it isn\'t enforcing anything yet, so spoofed mail is delivered normally.',
-        fix: 'Once you\'ve confirmed legitimate mail reliably passes SPF/DKIM, move to "p=quarantine" or "p=reject" so the record actually protects you.',
+        fix: "You're watching, not blocking yet. Turn on real protection once you trust your setup.",
         severity: 'warn'
       });
     } else {
       score += 10;
       recommendations.push({
-        issue: 'Your DMARC record doesn\'t specify a policy ("p=none", "p=quarantine", or "p=reject"), so it\'s not clear how receiving mail servers should treat spoofed email.',
-        fix: 'Add an explicit policy so the record actually does something.',
+        issue: "Your DMARC record doesn't say what to do with suspicious mail.",
+        fix: 'Add a policy so servers know whether to block, flag, or allow it.',
         severity: 'warn'
       });
     }
@@ -607,14 +607,14 @@ function buildScoreAndAdvice(spf, dkim, dmarc) {
     if (!dmarc.tags.rua) {
       if (dmarc.policy === 'none') {
         recommendations.push({
-          issue: 'Your DMARC record has no "rua" reporting address and is set to "p=none", so spoofed mail isn\'t being blocked or quarantined, and you\'re not receiving reports about it either.',
-          fix: 'Add "rua=mailto:you@yourdomain.com" and consider moving to "p=quarantine" or "p=reject" once you\'ve reviewed the reports.',
+          issue: "You're not getting any reports on who's sending mail as your domain.",
+          fix: 'Add a reporting address to start seeing that.',
           severity: 'warn'
         });
       } else if (dmarc.policy === 'reject' || dmarc.policy === 'quarantine') {
         recommendations.push({
-          issue: 'Your DMARC policy is enforcing correctly, but there\'s no "rua" reporting address set, so you have no visibility into what mail is being blocked or quarantined on your behalf.',
-          fix: 'Add "rua=mailto:you@yourdomain.com" to your DMARC record to start receiving aggregate reports.',
+          issue: "Your DMARC policy is already enforcing, but you're not getting any reports on who's sending mail as your domain.",
+          fix: 'Add a reporting address to start seeing that.',
           severity: 'info'
         });
       }
@@ -635,7 +635,7 @@ function buildScoreAndAdvice(spf, dkim, dmarc) {
     }
   } else {
     recommendations.push({
-      issue: 'No DMARC record was found for this domain.',
+      issue: "There's no DMARC record, so nothing stops scammers from sending fake email as you.",
       fix: 'Add a TXT record at "_dmarc.yourdomain.com" (e.g. "v=DMARC1; p=none; rua=mailto:you@yourdomain.com") to start monitoring who is sending email as your domain.',
       severity: 'fail'
     });
