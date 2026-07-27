@@ -403,6 +403,17 @@ function createTechDetails(record, tags) {
   return details;
 }
 
+// One-line plain-English takeaway sitting between the score ring and the
+// "What does this mean?" toggle. verdict.severity ('fail' | 'warn' | 'info'
+// | 'good') reuses the same color classes as the pass/fail check icons and
+// score ring, rather than introducing a separate color scheme.
+function createVerdictText(verdict) {
+  const p = document.createElement('p');
+  p.className = `verdict-text verdict-${verdict.severity}`;
+  p.textContent = verdict.text;
+  return p;
+}
+
 // Builds the collapsed-by-default "What does this mean?" panel that explains
 // the score in plain language, reusing the same tech-details/tech-content
 // classes as "Show technical details" so it matches that toggle/arrow style.
@@ -816,6 +827,7 @@ function renderResult(data, customSelector) {
   const scoreCol = document.createElement('div');
   scoreCol.className = 'result-col result-col-score';
   scoreCol.appendChild(createScoreRing(data.score));
+  scoreCol.appendChild(createVerdictText(data.verdict));
   scoreCol.appendChild(createScoreExplainer());
 
   const dkimCol = document.createElement('div');

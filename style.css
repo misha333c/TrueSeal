@@ -453,6 +453,28 @@ body::before {
   color: var(--red);
 }
 
+.verdict-text {
+  align-self: stretch;
+  margin: 2px 0 0;
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 1.4;
+  text-align: left;
+}
+
+.verdict-fail {
+  color: var(--red);
+}
+
+.verdict-warn {
+  color: var(--amber);
+}
+
+.verdict-info,
+.verdict-good {
+  color: var(--ink-muted);
+}
+
 /* Domain heading + star toggle, sitting above the result grid. The star
    button is hidden by default and only revealed once a logged-in user's
    starred status for the domain has been checked (script.js), so it never
@@ -746,7 +768,18 @@ body::before {
 }
 
 .score-explainer {
+  align-self: stretch;
   margin: 0;
+  text-align: left;
+}
+
+.score-explainer summary {
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.score-explainer summary:hover {
+  color: var(--ink);
 }
 
 .score-explainer-text {
@@ -904,6 +937,7 @@ body::before {
   padding: 14px;
   border-radius: 6px;
   border: 1px solid var(--border);
+  margin-bottom: 16px;
 }
 
 .notice p {

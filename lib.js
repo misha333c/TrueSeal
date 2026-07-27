@@ -431,6 +431,65 @@ function buildSpfOverLimitFix(spf) {
     `lookup cost, highest first, so you can decide what to trim: ${rankedList}.`;
 }
 
+// Boils the full check down to a single plain-English headline sentence plus
+// a severity, checked in order with first match winning — separate from
+// buildScoreAndAdvice's itemized recommendations, this is meant to be read
+// on its own as the one-line takeaway.
+function buildVerdict(spf, dkim, dmarc) {
+  if (spf.found && spf.lookupCount >= 10) {
+    return {
+      severity: 'fail',
+      text: 'Your SPF record is technically broken right now. Even your real emails may be getting rejected.'
+    };
+  }
+  if (!spf.found && !dkim.found) {
+    return {
+      severity: 'fail',
+      text: 'Your domain has no email protection at all. Anyone can send email pretending to be you.'
+    };
+  }
+  if (!dkim.found) {
+    return {
+      severity: 'warn',
+      text: "We couldn't confirm your DKIM setup automatically. This is often just a naming difference, not a real problem. Confirm it below to be sure."
+    };
+  }
+  if (!spf.found) {
+    return {
+      severity: 'fail',
+      text: "Anyone can currently send email that looks like it's from you. Nothing is checking who's allowed to send on your behalf."
+    };
+  }
+  if (!dmarc.found) {
+    return {
+      severity: 'warn',
+      text: "You're mostly set up, but without DMARC, nothing actually stops someone from sending fake emails using your exact address."
+    };
+  }
+  if (dmarc.policy === 'none') {
+    return {
+      severity: 'warn',
+      text: "You're now getting visibility into spoofed email, but nothing is blocking it yet. This is monitoring, not protection."
+    };
+  }
+  if (dmarc.policy === 'quarantine') {
+    return {
+      severity: 'info',
+      text: "You're in solid shape. Suspicious mail gets flagged, though not fully blocked yet."
+    };
+  }
+  if (dmarc.policy === 'reject') {
+    return {
+      severity: 'good',
+      text: "Your emails are fully protected. Scammers can't convincingly impersonate this domain."
+    };
+  }
+  return {
+    severity: 'info',
+    text: "Your DMARC record doesn't specify a policy, so it's not clear how spoofed email is handled."
+  };
+}
+
 function buildScoreAndAdvice(spf, dkim, dmarc) {
   let score = 0;
   const recommendations = [];
@@ -601,6 +660,7 @@ module.exports = {
   checkDkim,
   getDkimKeyStrength,
   buildScoreAndAdvice,
+  buildVerdict,
   checkMtaSts,
   checkTlsRpt,
   checkBimi,
