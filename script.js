@@ -82,7 +82,10 @@ const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-re
 function revealDiscoverFound(selector) {
   const showFoundText = () => setDiscoverStatus(`Found it! Your DKIM selector is: ${selector}`, 'is-found');
 
-  if (!discoverStatusEl || prefersReducedMotion) {
+  if (!discoverStatusEl) return;
+  discoverStatusEl.classList.remove('discover-active');
+
+  if (prefersReducedMotion) {
     showFoundText();
     return;
   }
@@ -125,6 +128,7 @@ async function checkForDiscoverResult(token, deadline) {
           `address at ${expectedDomain} instead.`,
           'is-timeout'
         );
+        if (discoverStatusEl) discoverStatusEl.classList.remove('discover-active');
       } else {
         selectorInput.value = data.selector;
         revealDiscoverFound(data.selector);
@@ -150,6 +154,7 @@ async function checkForDiscoverResult(token, deadline) {
         'is-timeout'
       );
     }
+    if (discoverStatusEl) discoverStatusEl.classList.remove('discover-active');
     return;
   }
 
@@ -183,6 +188,12 @@ if (discoverCopyButton) {
   discoverCopyButton.addEventListener('click', async () => {
     ensureDiscoverAddress();
     pulseDiscoverWatching();
+    // Unlike the brief is-watching pulse, this persists until the result
+    // resolves or times out — it's what actually turns the spinner on,
+    // deliberately delayed until the user has copied the address (the
+    // moment they're about to go send the email) rather than showing it
+    // the instant the panel opens.
+    if (discoverStatusEl) discoverStatusEl.classList.add('discover-active');
     try {
       await navigator.clipboard.writeText(discoverAddressEl.textContent);
       const original = discoverCopyButton.textContent;

@@ -241,6 +241,44 @@ body::before {
   border-color: var(--accent);
 }
 
+/* Floated (rather than inline-flex) so the possibly multi-line status text
+   next to it — "Waiting for your test email...", the timeout/mismatch
+   messages — wraps around it instead of being pushed to its own line: an
+   inline-block sibling here would have its shrink-to-fit width computed
+   against the full container width, not the space actually left beside the
+   spinner, so any text long enough to wrap gets bumped to a fresh line
+   entirely instead of sitting next to it. */
+.discover-spinner {
+  display: none;
+  float: left;
+  width: 22px;
+  height: 22px;
+  margin: 3px 6px 0 0;
+  vertical-align: middle;
+  border: 3px solid var(--grid);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: discover-spinner-spin 1.4s linear infinite;
+}
+
+/* Shown only once the user has actually copied the address (script.js adds
+   "discover-active" in the Copy click handler) — not the instant the panel
+   opens — and only while still actively waiting/watching, not during the
+   resolved/timeout states. No JS hook for the spinner itself: :has() reaches
+   back to style it off of the classes setDiscoverStatus/pulseDiscoverWatching
+   already put on its next sibling, so its visibility stays wired to the
+   existing status classes without any extra script changes. */
+.discover-spinner:has(+ .selector-discover-status.is-waiting.discover-active),
+.discover-spinner:has(+ .selector-discover-status.is-watching.discover-active) {
+  display: block;
+}
+
+@keyframes discover-spinner-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .selector-discover-status {
   margin: 8px 0 0;
   font-size: 12px;
@@ -295,6 +333,7 @@ body::before {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .discover-spinner,
   .selector-discover-status.is-waiting,
   .selector-discover-status.is-waiting.is-watching,
   .selector-discover-status.is-resolving {
