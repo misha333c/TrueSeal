@@ -496,9 +496,7 @@ function buildScoreAndAdvice(spf, dkim, dmarc) {
 
   if (spf.found && spf.lookupCount >= 10) {
     recommendations.push({
-      issue: `Your SPF record needs ${spf.lookupCount} DNS lookups to evaluate, which exceeds RFC 7208's ` +
-        '10-lookup limit, so SPF is already failing ("permerror") for anyone receiving your mail, even ' +
-        'though a record exists.',
+      issue: "Your SPF record needs too many DNS lookups, so it's already broken. Real emails may be getting rejected too.",
       fix: buildSpfOverLimitFix(spf),
       severity: 'fail'
     });
@@ -506,16 +504,14 @@ function buildScoreAndAdvice(spf, dkim, dmarc) {
     score += 30;
     if (spf.lookupCount >= 8) {
       recommendations.push({
-        issue: `Your SPF record is close to RFC 7208's 10-DNS-lookup limit, currently at ${spf.lookupCount} of 10.`,
-        fix: 'Be cautious adding more third-party sending services (marketing tools, CRMs, etc.), since one more could push it over the limit and break SPF entirely ("permerror").',
+        issue: `You're using ${spf.lookupCount} of the 10 lookups SPF allows. Getting close to the limit.`,
+        fix: 'Be careful adding more sending tools (marketing platforms, CRMs). One more could push you over and break SPF.',
         severity: 'warn'
       });
     }
   } else if (spf.status === 'multiple_records') {
     recommendations.push({
-      issue: `Found ${spf.records.length} SPF records for this domain, which is invalid. RFC 7208 permits ` +
-        'only one per domain, so SPF evaluation returns a "permerror" and fails entirely, even if each ' +
-        'individual record looks fine on its own.',
+      issue: `This domain has ${spf.records.length} SPF records, but only one is allowed. SPF fails completely until this is fixed.`,
       fix: 'Merge all the "include:" mechanisms from every record into a single "v=spf1" TXT record, then remove the duplicates.',
       severity: 'fail'
     });
