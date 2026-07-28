@@ -1,0 +1,7 @@
+name = "trueseal-dkim-selector-test"
+main = "src/index.js"
+compatibility_date = "2026-07-21"
+
+[[kv_namespaces]]
+binding = "DKIM_RESULTS"
+id = "eb98f065a72d42e58028db9a4e8d800f"

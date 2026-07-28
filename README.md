@@ -4,6 +4,8 @@ A tool that checks a domain's SPF, DKIM, and DMARC records, scores its email sec
 
 ![Screenshot of TrueSeal showing results for google.com](docs/homepage-v2.png)
 
+**Live at [trueseal.help](https://trueseal.help)**
+
 ## What it does
 
 Every time an email is sent, the receiving server checks whether it's really from the domain it claims to be. This tool runs those same checks (SPF, DKIM, DMARC) against any domain and explains what's working, what's missing, and what to fix, in plain English.
